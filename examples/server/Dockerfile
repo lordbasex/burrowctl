@@ -8,23 +8,15 @@ FROM golang:1.22-alpine AS builder
 RUN apk add --no-cache git
 
 # Set working directory
-WORKDIR /app
+WORKDIR /build
 
-# Copy the main module files
-COPY go.mod go.sum ./
-COPY client ./client
-COPY server ./server
+# Copy all project files (context should be from project root)
+COPY . .
 
-# Copy the server example files
-COPY examples/server/main.go ./
-
-RUN ls -la
-
-RUN go mod download
-
-# Build the server
+# Build the server example
+WORKDIR /build/examples/server
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
-RUN ls -la server
 
 # Production stage
 FROM alpine:latest
@@ -39,7 +31,7 @@ RUN addgroup -g 1001 -S burrowctl && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder --chown=burrowctl:burrowctl /app/server .
+COPY --from=builder --chown=burrowctl:burrowctl /build/examples/server/server .
 
 # Switch to non-root user
 USER burrowctl

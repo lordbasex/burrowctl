@@ -9,8 +9,12 @@ import (
 )
 
 func main() {
-	// Configuración programática - forzada en variables
-	config := &server.ServerConfig{
+	// Load configuration from flags and environment variables
+	config := server.LoadConfigFromFlags()
+	
+	// Override specific values for this example (keeping the detailed documentation)
+	// The configuration below shows advanced examples but will be overridden by environment variables
+	_ = &server.ServerConfig{
 		// Device and connection configuration
 		DeviceID: "my-custom-device",
 		AMQPURL:  "amqp://burrowuser:burrowpass123@localhost:5672/",
@@ -507,7 +511,10 @@ func main() {
 		HeartbeatMaxClientAge: 2 * time.Minute,  // Edad máxima del cliente
 	}
 
-	// Create server factory with custom configuration
+	// Note: The ServerConfig struct above is shown for documentation purposes
+	// but config (loaded from environment variables) will be used instead
+	
+	// Create server factory with environment-loaded configuration
 	factory := server.NewServerFactory(config)
 
 	// Start the server with our custom configuration

@@ -57,19 +57,19 @@ services:
       # ========================================
       # CONFIGURACIÓN DE CONEXIÓN Y DISPOSITIVO
       # ========================================
-      - BURROWCTL_DEVICE_ID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
-      - BURROWCTL_AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
-      - BURROWCTL_MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb-full-featured:3306)/burrowdb?parseTime=true
+      - DEVICE_ID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
+      - AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
+      - MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb-full-featured:3306)/burrowdb?parseTime=true
       
       # ========================================
       # CONFIGURACIÓN DE RECONEXIÓN RABBITMQ
       # ========================================
-      - BURROWCTL_RECONNECT_ENABLED=true
-      - BURROWCTL_RECONNECT_MAX_ATTEMPTS=0
-      - BURROWCTL_RECONNECT_INITIAL_INTERVAL=2s
-      - BURROWCTL_RECONNECT_MAX_INTERVAL=120s
-      - BURROWCTL_RECONNECT_BACKOFF_MULTIPLIER=1.5
-      - BURROWCTL_RECONNECT_RESET_INTERVAL=10m
+      - RECONNECT_ENABLED=true
+      - RECONNECT_MAX_ATTEMPTS=0
+      - RECONNECT_INITIAL_INTERVAL=2s
+      - RECONNECT_MAX_INTERVAL=120s
+      - RECONNECT_BACKOFF_MULTIPLIER=1.5
+      - RECONNECT_RESET_INTERVAL=10m
       
       # ========================================
       # CONFIGURACIÓN DE CACHE DE QUERIES

@@ -14,21 +14,30 @@ Use the comprehensive Makefile for all development tasks:
 - `make help` - Show all available commands
 - `make build` - Build project and all examples
 - `make test` - Run all tests
+- `make test-coverage` - Run tests with coverage
 - `make clean` - Clean build artifacts
 - `make install` - Install dependencies with `go mod tidy`
 
 ### Development Environment
 - `make docker-up` - Start development environment (RabbitMQ + MariaDB)
 - `make docker-down` - Stop development environment
+- `make docker-logs` - Show Docker environment logs
 - `make fmt` - Format code
 - `make lint` - Run linter
 - `make vet` - Run go vet
 
 ### Example Commands
-- `make run-server-example` - Run server example
+- `make run-server-example` - Run basic server example
+- `make run-server-advanced` - Run enterprise server with custom configuration
+- `make run-server-full` - Run server with all enterprise features
 - `make run-sql-example` - Run SQL client example
 - `make run-function-example` - Run function client example
 - `make run-command-example` - Run command client example
+- `make run-extended-client-example` - Run extended client with BurrowClient
+- `make run-transaction-example` - Run transaction example
+- `make run-cache-example` - Run query cache example
+- `make run-validation-example` - Run SQL validation example
+- `make list-examples` - List all available examples
 
 ### Release Commands
 - `make tag VERSION=vX.Y.Z` - Create version tag
@@ -78,7 +87,7 @@ Two modes available:
 ### DSN Format
 Universal DSN format across all clients:
 ```
-deviceID=<device-id>&amqp_uri=<rabbitmq-url>&timeout=<timeout>&debug=<boolean>
+deviceID=<device-id>&amqp_uri=<rabbitmq-url>&timeout=<timeout>&debug=<boolean>&reconnect_enabled=<boolean>&reconnect_max_attempts=<int>&prepared_statements=<boolean>
 ```
 
 ## Technology Stack
@@ -148,3 +157,45 @@ All new features are **100% backward compatible** - existing code benefits autom
 ## Version Management
 
 The Makefile includes automatic versioning based on git commits, updating `version.txt` automatically. Current version is tracked in `version.txt`.
+
+### Testing Commands
+- `make test` - Run all tests for project and examples
+- `make test-coverage` - Run tests with coverage reporting
+- `make test-examples` - Run tests specifically for examples
+
+### Advanced Server Configuration Examples
+```bash
+# High-performance server with rate limiting
+make run-server-advanced
+
+# Server with query caching enabled
+make run-server-cache
+
+# Server with strict SQL validation
+make run-server-validation
+
+# Full enterprise server with all features
+make run-server-full
+```
+
+## Key Architecture Files
+
+When working with this codebase, these are the most important files to understand:
+
+### Core Server Files
+- `/server/server.go` - Main server implementation and message handling
+- `/server/config.go` - Configuration management and validation
+- `/server/worker_pool.go` - Concurrent message processing system
+- `/server/rate_limiter.go` - Rate limiting implementation using token bucket
+- `/server/query_cache.go` - Query result caching system
+- `/server/sql_validator.go` - SQL security validation and policy enforcement
+
+### Core Client Files
+- `/client/driver.go` - SQL driver interface implementation
+- `/client/conn.go` - Connection management and protocol handling
+- `/client/burrow_client.go` - Extended client interface for functions/commands
+- `/client/reconnect.go` - Automatic reconnection with exponential backoff
+
+### Module Dependencies
+- `github.com/go-sql-driver/mysql v1.7.1` - MySQL database driver
+- `github.com/rabbitmq/amqp091-go v1.10.0` - RabbitMQ AMQP client
