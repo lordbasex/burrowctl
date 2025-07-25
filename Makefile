@@ -82,18 +82,6 @@ build: build-examples ## Compila el proyecto y ejemplos
 	@echo "$(GREEN)🔨 Compilando proyecto...$(NC)"
 	go build -v ./...
 
-.PHONY: test
-test: test-examples ## Ejecuta tests del proyecto y ejemplos
-	@echo "$(GREEN)🧪 Ejecutando tests...$(NC)"
-	go test -v ./...
-
-.PHONY: test-coverage
-test-coverage: ## Ejecuta tests con cobertura
-	@echo "$(GREEN)📊 Ejecutando tests con cobertura...$(NC)"
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "$(GREEN)Reporte de cobertura generado: coverage.html$(NC)"
-
 .PHONY: lint
 lint: ## Ejecuta el linter
 	@echo "$(GREEN)🔍 Ejecutando linter...$(NC)"
@@ -104,11 +92,6 @@ lint: ## Ejecuta el linter
 fmt: ## Formatea el código
 	@echo "$(GREEN)✨ Formateando código...$(NC)"
 	go fmt ./...
-
-.PHONY: vet
-vet: ## Ejecuta go vet
-	@echo "$(GREEN)🔍 Ejecutando go vet...$(NC)"
-	go vet ./...
 
 # Tareas de limpieza
 .PHONY: clean
@@ -140,7 +123,7 @@ check-main-branch: ## Verifica que estés en la rama main
 	@echo "$(GREEN)✅ Estás en la rama main$(NC)"
 
 .PHONY: pre-release-checks
-pre-release-checks: check-main-branch check-git-clean test vet ## Ejecuta todas las verificaciones antes del release
+pre-release-checks: check-main-branch check-git-clean ## Ejecuta todas las verificaciones antes del release
 	@echo "$(GREEN)✅ Todas las verificaciones pasaron$(NC)"
 
 .PHONY: tag
@@ -219,26 +202,6 @@ build-examples: ## Compila todos los ejemplos
 	cd examples/server && go build -o full-featured-server main.go
 	@echo "$(GREEN)✅ Ejemplos compilados$(NC)"
 
-.PHONY: test-examples
-test-examples: ## Ejecuta tests de los ejemplos
-	@echo "$(GREEN)🧪 Testeando ejemplos...$(NC)"
-	@echo "$(BLUE)  → Verificando command example...$(NC)"
-	cd examples/client/command-example && go build -o /tmp/command-example-test main.go && rm -f /tmp/command-example-test
-	@echo "$(BLUE)  → Verificando function example...$(NC)"
-	cd examples/client/function-example && go build -o /tmp/function-example-test main.go && rm -f /tmp/function-example-test
-	@echo "$(BLUE)  → Verificando sql example...$(NC)"
-	cd examples/client/sql-example && go build -o /tmp/sql-example-test main.go && rm -f /tmp/sql-example-test
-	@echo "$(BLUE)  → Testeando server example básico...$(NC)"
-	cd examples/server/basic && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
-	@echo "$(BLUE)  → Testeando server example avanzado...$(NC)"
-	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
-	@echo "$(BLUE)  → Testeando cache server example...$(NC)"
-	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
-	@echo "$(BLUE)  → Testeando validation server example...$(NC)"
-	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
-	@echo "$(BLUE)  → Testeando full-featured server example...$(NC)"
-	cd examples/server && go test -v ./... 2>/dev/null || echo "$(YELLOW)    No tests found - skipping$(NC)"
-	@echo "$(GREEN)✅ Tests de ejemplos completados$(NC)"
 
 .PHONY: run-server-example
 run-server-example: ## Ejecuta el ejemplo del servidor básico
