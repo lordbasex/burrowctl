@@ -54,6 +54,13 @@ type ServerConfig struct {
 	HeartbeatCleanup      time.Duration
 	HeartbeatMaxClientAge time.Duration
 
+	// Command execution configuration
+	CommandTimeout time.Duration
+
+	// Query execution configuration
+	SQLTimeout      time.Duration
+	FunctionTimeout time.Duration
+
 	// Reconnection configuration
 	ReconnectEnabled           bool
 	ReconnectMaxAttempts       int
@@ -109,6 +116,13 @@ func DefaultServerConfig() *ServerConfig {
 		HeartbeatCleanup:      1 * time.Minute,
 		HeartbeatMaxClientAge: 2 * time.Minute,
 
+		// Command execution configuration
+		CommandTimeout: 30 * time.Second,
+
+		// Query execution configuration
+		SQLTimeout:      30 * time.Second,
+		FunctionTimeout: 30 * time.Second,
+
 		// Reconnection configuration
 		ReconnectEnabled:           true,
 		ReconnectMaxAttempts:       5,
@@ -161,6 +175,11 @@ func LoadConfigFromFlags() *ServerConfig {
 	flag.DurationVar(&config.HeartbeatCleanup, "heartbeat-cleanup", config.HeartbeatCleanup, "Heartbeat cleanup interval")
 	flag.DurationVar(&config.HeartbeatMaxClientAge, "heartbeat-max-client-age", config.HeartbeatMaxClientAge, "Maximum age for client heartbeat records")
 
+	// Command execution configuration flags
+	flag.DurationVar(&config.CommandTimeout, "command-timeout", config.CommandTimeout, "Timeout for command execution")
+	flag.DurationVar(&config.SQLTimeout, "sql-timeout", config.SQLTimeout, "Timeout for SQL queries")
+	flag.DurationVar(&config.FunctionTimeout, "function-timeout", config.FunctionTimeout, "Timeout for function calls")
+
 	// Reconnection configuration flags
 	flag.BoolVar(&config.ReconnectEnabled, "reconnect-enabled", config.ReconnectEnabled, "Enable client reconnection logic")
 	flag.IntVar(&config.ReconnectMaxAttempts, "reconnect-max-attempts", config.ReconnectMaxAttempts, "Maximum reconnection attempts")
@@ -183,6 +202,11 @@ func LoadConfigFromFlags() *ServerConfig {
 	config.HeartbeatMaxMissed = getEnvInt("HEARTBEAT_MAX_MISSED", config.HeartbeatMaxMissed)
 	config.HeartbeatCleanup = getEnvDuration("HEARTBEAT_CLEANUP", config.HeartbeatCleanup)
 	config.HeartbeatMaxClientAge = getEnvDuration("HEARTBEAT_MAX_CLIENT_AGE", config.HeartbeatMaxClientAge)
+
+	// Load command execution configuration from environment variables
+	config.CommandTimeout = getEnvDuration("COMMAND_TIMEOUT", config.CommandTimeout)
+	config.SQLTimeout = getEnvDuration("SQL_TIMEOUT", config.SQLTimeout)
+	config.FunctionTimeout = getEnvDuration("FUNCTION_TIMEOUT", config.FunctionTimeout)
 
 	// Load reconnection configuration from environment variables
 	config.ReconnectEnabled = getEnvBool("RECONNECT_ENABLED", config.ReconnectEnabled)

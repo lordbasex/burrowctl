@@ -306,7 +306,7 @@ docker-logs-app: ## Muestra logs del entorno Docker
 .PHONY: docker-clean
 docker-clean: ## Limpia el entorno Docker
 	@echo "$(GREEN)🧹 Limpiando entorno Docker...$(NC)"
-	cd examples/server && docker rmi -f server-app
+	cd examples/server && docker rm -f server-app && docker rmi -f server-app
 	@echo "$(GREEN)✅ Entorno Docker limpiado$(NC)"
 
 .PHONY: clean-examples

@@ -516,6 +516,9 @@ func runServer() {
 		mysqlDSN,       // MariaDB DSN
 		connectionMode, // Connection mode: "open" for connection pool, "close" for per-query connections
 		pool,           // Configuration of the pool
+		30*time.Second, // Command timeout
+		30*time.Second, // SQL timeout
+		30*time.Second, // Function timeout
 	)
 
 	// Register example functions

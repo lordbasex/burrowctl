@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/lordbasex/burrowctl/client"
 )
@@ -12,7 +14,7 @@ func runCommandExamples() {
 	fmt.Println("💻 Command Examples (System Commands)")
 	fmt.Println("────────────────────────────────────")
 
-	debug := false
+	debug := true
 	// Create BurrowClient for command execution
 	dsn := fmt.Sprintf("deviceID=%s&amqp_uri=%s&timeout=%s&debug=%t&reconnect_enabled=true&reconnect_max_attempts=3",
 		deviceID, amqpURL, timeout, debug)
@@ -160,12 +162,20 @@ func runCommandExamples() {
 
 	fmt.Print("\n────────────────────────────────────────\n")
 
-	// Example 9: Who is logged in
-	fmt.Println("\n🔍 Example 9: Logged in users (who)")
-	cmdResult, err = bc.ExecCommand("who")
+	// Example 9: Testing timeout behavior with timing information
+	fmt.Println("\n🔍 Example 9: Testing timeout behavior (sleep 60)")
+
+	// Record start time for debugging
+	startTime := time.Now()
+
+	cmdResult, err = bc.ExecCommand("sleep 60")
+
+	// Calculate execution time
+	executionTime := time.Since(startTime)
+
 	if err != nil {
-		log.Printf("❌ Command error: %v", err)
-		return
+		fmt.Printf("  ❌ Unexpected error after %v: %v\n", executionTime, err)
+		os.Exit(1)
 	}
 
 	if len(cmdResult.Stdout) == 0 || (len(cmdResult.Stdout) == 1 && strings.TrimSpace(cmdResult.Stdout[0]) == "") {

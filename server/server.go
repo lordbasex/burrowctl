@@ -41,9 +41,12 @@ import (
 //   - mysqlDSN: MySQL Data Source Name (e.g., "user:pass@tcp(localhost:3306)/dbname")
 //   - mode: Connection mode - "open" for connection pooling (default) or "close" for per-query connections
 //   - poolConf: Database connection pool configuration (nil for defaults)
+//   - commandTimeout: Timeout for command execution (0 for default 30 seconds)
+//   - sqlTimeout: Timeout for SQL queries (0 for default 30 seconds)
+//   - functionTimeout: Timeout for function calls (0 for default 30 seconds)
 //
 // Returns a configured Handler ready to start processing requests.
-func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) *Handler {
+func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig, commandTimeout, sqlTimeout, functionTimeout time.Duration) *Handler {
 	// Default to 'open' mode for better performance
 	if mode == "" {
 		mode = "open"
@@ -71,12 +74,26 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig) 
 		}
 	}
 
+	// Set default timeouts if not provided
+	if commandTimeout == 0 {
+		commandTimeout = 30 * time.Second
+	}
+	if sqlTimeout == 0 {
+		sqlTimeout = 30 * time.Second
+	}
+	if functionTimeout == 0 {
+		functionTimeout = 30 * time.Second
+	}
+
 	handler := &Handler{
 		deviceID:           deviceID,
 		amqpURL:            amqpURL,
 		mysqlDSN:           mysqlDSN,
 		mode:               mode,
 		poolConf:           *poolConf,
+		commandTimeout:     commandTimeout,                                // Set command timeout
+		sqlTimeout:         sqlTimeout,                                    // Set SQL timeout
+		functionTimeout:    functionTimeout,                               // Set function timeout
 		functionRegistry:   make(map[string]interface{}),                  // Initialize empty function registry
 		transactionManager: NewTransactionManager(),                       // Initialize transaction manager
 		queryCache:         NewQueryCache(DefaultQueryCacheConfig()),      // Initialize query cache
@@ -302,8 +319,27 @@ func (h *Handler) Start(ctx context.Context) error {
 //
 // This method runs in a separate goroutine for each message to enable concurrent processing.
 func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
+	// Check if this is a heartbeat message by examining the message body first
+	if len(msg.Body) > 0 {
+		var heartbeatCheck map[string]interface{}
+		if err := json.Unmarshal(msg.Body, &heartbeatCheck); err == nil {
+			// Check if this looks like a heartbeat message
+			if _, hasDeviceID := heartbeatCheck["deviceID"]; hasDeviceID {
+				if _, hasClientIP := heartbeatCheck["clientIP"]; hasClientIP {
+					if _, hasCorrID := heartbeatCheck["corrID"]; hasCorrID {
+						// This is likely a heartbeat message, handle it directly
+						log.Printf("[server] Detected heartbeat message in RPC queue, forwarding to heartbeat manager")
+						h.heartbeatManager.HandleHeartbeatPing(ch, msg)
+						return
+					}
+				}
+			}
+		}
+	}
+
 	var req RPCRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
+		log.Printf("[server] Failed to parse RPC request: %v (body: %s)", err, string(msg.Body))
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
 		return
 	}
@@ -361,7 +397,7 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 // - Transaction support for ACID operations
 func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
 	// Create context with timeout to prevent long-running queries
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), h.sqlTimeout)
 	defer cancel()
 
 	// Validate SQL query for security and policy compliance
@@ -571,7 +607,7 @@ func (h *Handler) convertDatabaseValue(val interface{}, colType *sql.ColumnType)
 // - Security through command parsing and validation
 func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
 	// Create context with timeout to prevent commands from running indefinitely
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), h.commandTimeout)
 	defer cancel()
 
 	log.Printf("[server] executing command: %s", req.Query)
@@ -652,7 +688,7 @@ func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequ
 // - Comprehensive error handling
 func (h *Handler) handleFunction(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest) {
 	// Create context with timeout for function execution
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), h.functionTimeout)
 	defer cancel()
 
 	log.Printf("[server] executing function: %s", req.Query)
@@ -1104,6 +1140,39 @@ func (h *Handler) SetSQLValidationConfig(config SQLValidationConfig) {
 	h.sqlValidator.UpdateConfig(config)
 	log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v",
 		config.Enabled, config.StrictMode)
+}
+
+// GetCommandTimeout returns the current command timeout configuration.
+func (h *Handler) GetCommandTimeout() time.Duration {
+	return h.commandTimeout
+}
+
+// SetCommandTimeout updates the command timeout configuration.
+func (h *Handler) SetCommandTimeout(timeout time.Duration) {
+	h.commandTimeout = timeout
+	log.Printf("[server] Command timeout updated: %v", timeout)
+}
+
+// GetSQLTimeout returns the current SQL timeout configuration.
+func (h *Handler) GetSQLTimeout() time.Duration {
+	return h.sqlTimeout
+}
+
+// SetSQLTimeout updates the SQL timeout configuration.
+func (h *Handler) SetSQLTimeout(timeout time.Duration) {
+	h.sqlTimeout = timeout
+	log.Printf("[server] SQL timeout updated: %v", timeout)
+}
+
+// GetFunctionTimeout returns the current function timeout configuration.
+func (h *Handler) GetFunctionTimeout() time.Duration {
+	return h.functionTimeout
+}
+
+// SetFunctionTimeout updates the function timeout configuration.
+func (h *Handler) SetFunctionTimeout(timeout time.Duration) {
+	h.functionTimeout = timeout
+	log.Printf("[server] Function timeout updated: %v", timeout)
 }
 
 // GetHeartbeatStats returns heartbeat statistics

@@ -114,12 +114,20 @@ services:
       # ========================================
       # CONFIGURACIÓN DE HEARTBEAT
       # ========================================
-      - BURROWCTL_HEARTBEAT_ENABLED=true
-      - BURROWCTL_HEARTBEAT_INTERVAL=10s
-      - BURROWCTL_HEARTBEAT_TIMEOUT=3s
-      - BURROWCTL_HEARTBEAT_MAX_MISSED=3
-      - BURROWCTL_HEARTBEAT_CLEANUP=30s
-      - BURROWCTL_HEARTBEAT_MAX_CLIENT_AGE=1m
+      - HEARTBEAT_ENABLED=true
+      - HEARTBEAT_INTERVAL=10s
+      - HEARTBEAT_TIMEOUT=3s
+      - HEARTBEAT_MAX_MISSED=3
+      - HEARTBEAT_CLEANUP=30s
+      - HEARTBEAT_MAX_CLIENT_AGE=1m
+
+      # ========================================
+      # CONFIGURACIÓN DE TIMEOUTS
+      # ========================================
+      - COMMAND_TIMEOUT=30s
+      - SQL_TIMEOUT=120s
+      - FUNCTION_TIMEOUT=45s
+
     networks:
       - burrow_network
     # The server will use programmatic configuration from main.go

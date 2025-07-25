@@ -26,6 +26,9 @@ func (sf *ServerFactory) CreateServer() (*Handler, *MonitoringManager, error) {
 		sf.config.MySQLDSN,
 		"open",
 		sf.config.ToPoolConfig(),
+		sf.config.CommandTimeout,
+		sf.config.SQLTimeout,
+		sf.config.FunctionTimeout,
 	)
 
 	// Configure query cache

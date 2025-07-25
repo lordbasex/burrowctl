@@ -11,7 +11,7 @@ import (
 func main() {
 	// Load configuration from flags and environment variables
 	config := server.LoadConfigFromFlags()
-	
+
 	// Override specific values for this example (keeping the detailed documentation)
 	// The configuration below shows advanced examples but will be overridden by environment variables
 	_ = &server.ServerConfig{
@@ -513,7 +513,7 @@ func main() {
 
 	// Note: The ServerConfig struct above is shown for documentation purposes
 	// but config (loaded from environment variables) will be used instead
-	
+
 	// Create server factory with environment-loaded configuration
 	factory := server.NewServerFactory(config)
 

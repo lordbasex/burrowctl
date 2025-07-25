@@ -45,6 +45,13 @@ type Handler struct {
 	// Heartbeat management
 	heartbeatManager *ServerHeartbeatManager // Heartbeat manager for connection monitoring
 
+	// Command execution configuration
+	commandTimeout time.Duration // Timeout for command execution
+
+	// Query execution configuration
+	sqlTimeout      time.Duration // Timeout for SQL queries
+	functionTimeout time.Duration // Timeout for function calls
+
 	// Queue management
 	rpcQueueName       string // RPC queue name for this device
 	heartbeatQueueName string // Heartbeat queue name for this device

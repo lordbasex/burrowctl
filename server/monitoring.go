@@ -183,6 +183,14 @@ func (mm *MonitoringManager) DisplayConfiguration() {
 	fmt.Printf("  Max Open Connections: %d\n", mm.config.PoolOpen)
 	fmt.Printf("  Connection Lifetime: %v\n", mm.config.ConnLifetime)
 
+	fmt.Printf("\n🔄 Heartbeat Configuration:\n")
+	fmt.Printf("  Enabled: %v\n", mm.config.HeartbeatEnabled)
+	fmt.Printf("  Interval: %v\n", mm.config.HeartbeatInterval)
+	fmt.Printf("  Timeout: %v\n", mm.config.HeartbeatTimeout)
+	fmt.Printf("  Max Missed: %d\n", mm.config.HeartbeatMaxMissed)
+	fmt.Printf("  Cleanup Interval: %v\n", mm.config.HeartbeatCleanup)
+	fmt.Printf("  Max Client Age: %v\n", mm.config.HeartbeatMaxClientAge)
+
 	fmt.Printf("\n🔄 Starting comprehensive monitoring...\n")
 }
 
