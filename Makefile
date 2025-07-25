@@ -324,7 +324,7 @@ docker-logs: ## Muestra logs del entorno Docker
 .PHONY: docker-logs-app
 docker-logs-app: ## Muestra logs del entorno Docker
 	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
-	cd examples/server && docker-compose logs -f app
+	cd examples/server && docker-compose -f docker-compose-full.yml logs -f app
 
 
 .PHONY: clean-examples
