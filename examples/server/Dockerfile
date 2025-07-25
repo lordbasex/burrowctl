@@ -21,8 +21,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
 # Production stage
 FROM alpine:latest
 
+ENV TZ=America/Argentina/Buenos_Aires
+
 # Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates tzdata net-tools 
 
 # Create non-root user
 RUN addgroup -g 1001 -S burrowctl && \

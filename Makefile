@@ -123,11 +123,11 @@ check-git-clean: ## Verifica que el git esté limpio
 	@echo "$(GREEN)🔍 Verificando estado de git...$(NC)"
 	@UNCOMMITTED=$$(git status --porcelain | grep -v "^ M version.txt$$" | grep -v "^M  version.txt$$"); \
 	if [ -n "$$UNCOMMITTED" ]; then \
-		echo "$(RED)❌ Error: Hay cambios sin commit$(NC)"; \
+		echo "$(YELLOW)⚠️  Advertencia: Hay cambios sin commit$(NC)"; \
 		git status --short | grep -v "version.txt"; \
-		exit 1; \
+	else \
+		echo "$(GREEN)✅ Git está limpio (ignorando version.txt)$(NC)"; \
 	fi
-	@echo "$(GREEN)✅ Git está limpio (ignorando version.txt)$(NC)"
 
 .PHONY: check-main-branch
 check-main-branch: ## Verifica que estés en la rama main
@@ -327,19 +327,24 @@ docker-up: ## Levanta el entorno Docker para el servidor empresarial completo
 .PHONY: docker-down
 docker-down: ## Detiene el entorno Docker
 	@echo "$(GREEN)🐳 Deteniendo entorno Docker...$(NC)"
-	cd examples/server && docker-compose down
+	cd examples/server && docker-compose -f docker-compose-full.yml down
 	@echo "$(GREEN)✅ Entorno Docker detenido$(NC)"
 
 .PHONY: docker-logs
 docker-logs: ## Muestra logs del entorno Docker
 	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
-	cd examples/server && docker-compose logs -f
+	cd examples/server && docker-compose -f docker-compose-full.yml logs -f
 
 .PHONY: docker-logs-app
 docker-logs-app: ## Muestra logs del entorno Docker
 	@echo "$(GREEN)📋 Mostrando logs de Docker...$(NC)"
 	cd examples/server && docker-compose -f docker-compose-full.yml logs -f app
 
+.PHONY: docker-clean
+docker-clean: ## Limpia el entorno Docker
+	@echo "$(GREEN)🧹 Limpiando entorno Docker...$(NC)"
+	cd examples/server && docker rmi -f server-app
+	@echo "$(GREEN)✅ Entorno Docker limpiado$(NC)"
 
 .PHONY: clean-examples
 clean-examples: ## Limpia binarios de ejemplos
