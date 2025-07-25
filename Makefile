@@ -144,7 +144,7 @@ pre-release-checks: check-main-branch check-git-clean test vet ## Ejecuta todas 
 	@echo "$(GREEN)✅ Todas las verificaciones pasaron$(NC)"
 
 .PHONY: tag
-tag: pre-release-checks ## Crea tag de versión (usar VERSION=vX.Y.Z)
+tag: pre-release-checks ## Crea solo el tag (sin push)
 	@echo "$(GREEN)🏷️  Creando tag $(VERSION)...$(NC)"
 	@if git tag -l | grep -q "^$(VERSION)$$"; then \
 		echo "$(RED)❌ Error: El tag $(VERSION) ya existe$(NC)"; \
@@ -154,7 +154,23 @@ tag: pre-release-checks ## Crea tag de versión (usar VERSION=vX.Y.Z)
 	@echo "$(GREEN)✅ Tag $(VERSION) creado$(NC)"
 
 .PHONY: push
-push: ## Hace push del código y tags
+push: pre-release-checks ## Hace push del código, crea tag y release completo
+	@echo "$(GREEN)🏷️  Creando tag $(VERSION)...$(NC)"
+	@if git tag -l | grep -q "^$(VERSION)$$"; then \
+		echo "$(RED)❌ Error: El tag $(VERSION) ya existe$(NC)"; \
+		exit 1; \
+	fi
+	git tag -a $(VERSION) -m "Release $(VERSION)"
+	@echo "$(GREEN)✅ Tag $(VERSION) creado$(NC)"
+	@echo "$(GREEN)🚀 Haciendo push del código...$(NC)"
+	git push origin main
+	@echo "$(GREEN)🚀 Haciendo push de los tags...$(NC)"
+	git push origin --tags
+	@echo "$(GREEN)🎉 Release $(VERSION) completado exitosamente!$(NC)"
+	@echo "$(BLUE)Para verificar: git ls-remote --tags origin$(NC)"
+
+.PHONY: push-only
+push-only: ## Hace solo push del código y tags (sin crear nuevo tag)
 	@echo "$(GREEN)🚀 Haciendo push del código...$(NC)"
 	git push origin main
 	@echo "$(GREEN)🚀 Haciendo push de los tags...$(NC)"
@@ -162,9 +178,7 @@ push: ## Hace push del código y tags
 	@echo "$(GREEN)✅ Push completado$(NC)"
 
 .PHONY: release
-release: tag push ## Crea tag y hace push (versión completa)
-	@echo "$(GREEN)🎉 Release $(VERSION) completado exitosamente!$(NC)"
-	@echo "$(BLUE)Para verificar: git ls-remote --tags origin$(NC)"
+release: push ## Crea tag y hace push (versión completa) - alias de push
 
 .PHONY: quick-release
 quick-release: ## Release rápido con VERSION por defecto
