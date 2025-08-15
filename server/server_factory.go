@@ -29,6 +29,7 @@ func (sf *ServerFactory) CreateServer() (*Handler, *MonitoringManager, error) {
 		sf.config.CommandTimeout,
 		sf.config.SQLTimeout,
 		sf.config.FunctionTimeout,
+		sf.config, // Pass the full configuration
 	)
 
 	// Configure query cache

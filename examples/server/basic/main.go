@@ -519,6 +519,7 @@ func runServer() {
 		30*time.Second, // Command timeout
 		30*time.Second, // SQL timeout
 		30*time.Second, // Function timeout
+		nil,            // Basic example uses nil config - will use defaults
 	)
 
 	// Register example functions

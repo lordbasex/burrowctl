@@ -47,10 +47,17 @@ import (
 //   - functionTimeout: Timeout for function calls (0 for default 30 seconds)
 //
 // Returns a configured Handler ready to start processing requests.
-func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig, commandTimeout, sqlTimeout, functionTimeout time.Duration) *Handler {
+func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig, commandTimeout, sqlTimeout, functionTimeout time.Duration, config *ServerConfig) *Handler {
 	// Default to 'open' mode for better performance
 	if mode == "" {
 		mode = "open"
+	}
+
+	// Create default config if none provided
+	if config == nil {
+		config = &ServerConfig{
+			LogLevel: false, // Default to no logging for basic examples
+		}
 	}
 
 	// Default pool configuration optimized for typical workloads
@@ -87,6 +94,7 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig, 
 	}
 
 	handler := &Handler{
+		config:             config, // Initialize configuration
 		deviceID:           deviceID,
 		amqpURL:            amqpURL,
 		mysqlDSN:           mysqlDSN,
