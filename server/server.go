@@ -192,11 +192,17 @@ func (h *Handler) Start(ctx context.Context) error {
 	// check URL amqp o amqps
 	if strings.HasPrefix(h.amqpURL, "amqps://") {
 
+		if h.config.LogLevel {
+			log.Printf("Connecting to RabbitMQ with TLS: %s", h.amqpURL)
+		}
+
 		// cortar url de amqpURL luego de la @ y el :
 		domain := strings.Split(h.amqpURL, "@")[1]
 		domain = strings.Split(domain, ":")[0]
 
-		log.Printf("[server] domain: %s", domain)
+		if h.config.LogLevel {
+			log.Printf("[server] domain: %s", domain)
+		}
 
 		// TLS explícito con SNI (opcional pero recomendable)
 		tlsCfg := &tls.Config{
@@ -228,10 +234,14 @@ func (h *Handler) Start(ctx context.Context) error {
 		h.db.SetConnMaxLifetime(h.poolConf.ConnMaxLifetime)
 		defer h.db.Close()
 
-		log.Printf("[server] Database pool initialized: idle=%d open=%d lifetime=%s",
-			h.poolConf.MaxIdleConns, h.poolConf.MaxOpenConns, h.poolConf.ConnMaxLifetime)
+		if h.config.LogLevel {
+			log.Printf("[server] Database pool initialized: idle=%d open=%d lifetime=%s",
+				h.poolConf.MaxIdleConns, h.poolConf.MaxOpenConns, h.poolConf.ConnMaxLifetime)
+		}
 	} else {
-		log.Println("[server] Using 'close' mode: opening/closing DB connection per query")
+		if h.config.LogLevel {
+			log.Println("[server] Using 'close' mode: opening/closing DB connection per query")
+		}
 	}
 
 	// Create RabbitMQ channel for message operations
@@ -267,7 +277,9 @@ func (h *Handler) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to declare heartbeat queue: %w", err)
 	}
 
-	log.Printf("[server] Queues '%s' and '%s' declared successfully", h.rpcQueueName, h.heartbeatQueueName)
+	if h.config.LogLevel {
+		log.Printf("[server] Queues '%s' and '%s' declared successfully", h.rpcQueueName, h.heartbeatQueueName)
+	}
 
 	// Start consuming messages from the RPC queue
 	rpcMsgs, err := ch.Consume(h.rpcQueueName, "", true, true, false, false, nil)
@@ -281,7 +293,9 @@ func (h *Handler) Start(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("[server] Listening on RPC queue %s and heartbeat queue %s", h.rpcQueueName, h.heartbeatQueueName)
+	if h.config.LogLevel {
+		log.Printf("[server] Listening on RPC queue %s and heartbeat queue %s", h.rpcQueueName, h.heartbeatQueueName)
+	}
 
 	// Start the worker pool for concurrent message processing
 	if err := h.workerPool.Start(); err != nil {
@@ -302,7 +316,9 @@ func (h *Handler) Start(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			// Context cancelled, shut down gracefully
-			log.Printf("[server] Shutting down server...")
+			if h.config.LogLevel {
+				log.Printf("[server] Shutting down server...")
+			}
 			return nil
 		case msg := <-rpcMsgs:
 			// Submit RPC message to worker pool
@@ -313,7 +329,9 @@ func (h *Handler) Start(ctx context.Context) error {
 			}
 
 			if err := h.workerPool.SubmitTask(task); err != nil {
-				log.Printf("[server] Failed to submit RPC task to worker pool: %v", err)
+				if h.config.LogLevel {
+					log.Printf("[server] Failed to submit RPC task to worker pool: %v", err)
+				}
 				// Send error response directly if worker pool fails
 				errorResp := RPCResponse{Error: "Server overloaded, please try again"}
 				if body, marshalErr := json.Marshal(errorResp); marshalErr == nil {
@@ -350,7 +368,9 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 				if _, hasClientIP := heartbeatCheck["clientIP"]; hasClientIP {
 					if _, hasCorrID := heartbeatCheck["corrID"]; hasCorrID {
 						// This is likely a heartbeat message, handle it directly
-						log.Printf("[server] Detected heartbeat message in RPC queue, forwarding to heartbeat manager")
+						if h.config.LogLevel {
+							log.Printf("[server] Detected heartbeat message in RPC queue, forwarding to heartbeat manager")
+						}
 						h.heartbeatManager.HandleHeartbeatPing(ch, msg)
 						return
 					}
@@ -361,21 +381,27 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 
 	var req RPCRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
-		log.Printf("[server] Failed to parse RPC request: %v (body: %s)", err, string(msg.Body))
+		if h.config.LogLevel {
+			log.Printf("[server] Failed to parse RPC request: %v (body: %s)", err, string(msg.Body))
+		}
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
 		return
 	}
 
 	// Check rate limit before processing request
 	if !h.rateLimiter.Allow(req.ClientIP) {
-		log.Printf("[server] rate limit exceeded for client %s", req.ClientIP)
+		if h.config.LogLevel {
+			log.Printf("[server] rate limit exceeded for client %s", req.ClientIP)
+		}
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{
 			Error: "Rate limit exceeded. Please slow down your requests.",
 		})
 		return
 	}
 
-	log.Printf("[server] received ip=%s type=%s query=%s", req.ClientIP, req.Type, req.Query)
+	if h.config.LogLevel {
+		log.Printf("[server] received ip=%s type=%s query=%s", req.ClientIP, req.Type, req.Query)
+	}
 
 	// Route to appropriate handler based on request type
 	switch req.Type {
@@ -427,15 +453,19 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	if !validationResult.Valid {
 		// Query failed validation, return error
 		errorMsg := fmt.Sprintf("SQL validation failed: %s", strings.Join(validationResult.Errors, "; "))
-		log.Printf("[server] SQL validation blocked query from %s: %s (risk: %s)",
-			req.ClientIP, truncateQuery(req.Query, 50), validationResult.Risk)
+		if h.config.LogLevel {
+			log.Printf("[server] SQL validation blocked query from %s: %s (risk: %s)",
+				req.ClientIP, truncateQuery(req.Query, 50), validationResult.Risk)
+		}
 		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: errorMsg})
 		return
 	}
 
 	// Log warnings if any
 	if len(validationResult.Warnings) > 0 {
-		log.Printf("[server] SQL validation warnings for query: %s", strings.Join(validationResult.Warnings, "; "))
+		if h.config.LogLevel {
+			log.Printf("[server] SQL validation warnings for query: %s", strings.Join(validationResult.Warnings, "; "))
+		}
 	}
 
 	// Skip cache for transactions and write operations
@@ -444,11 +474,15 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	// Try to get result from cache first (only for read-only queries outside transactions)
 	if useCache {
 		if cachedResponse, found := h.queryCache.Get(req.Query, req.Params); found {
-			log.Printf("[server] Cache HIT for query: %s", truncateQuery(req.Query, 50))
+			if h.config.LogLevel {
+				log.Printf("[server] Cache HIT for query: %s", truncateQuery(req.Query, 50))
+			}
 			h.respond(ch, msg.ReplyTo, msg.CorrelationId, *cachedResponse)
 			return
 		}
-		log.Printf("[server] Cache MISS for query: %s", truncateQuery(req.Query, 50))
+		if h.config.LogLevel {
+			log.Printf("[server] Cache MISS for query: %s", truncateQuery(req.Query, 50))
+		}
 	}
 
 	var rows *sql.Rows
@@ -545,7 +579,9 @@ func (h *Handler) handleSQL(ch *amqp.Channel, msg amqp.Delivery, req RPCRequest)
 	// Cache the result if applicable (only for read-only queries outside transactions)
 	if useCache {
 		h.queryCache.Set(req.Query, req.Params, response)
-		log.Printf("[server] Query result cached: %s", truncateQuery(req.Query, 50))
+		if h.config.LogLevel {
+			log.Printf("[server] Query result cached: %s", truncateQuery(req.Query, 50))
+		}
 	}
 
 	// Send successful response with query results
@@ -632,7 +668,9 @@ func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequ
 	ctx, cancel := context.WithTimeout(context.Background(), h.commandTimeout)
 	defer cancel()
 
-	log.Printf("[server] executing command: %s", req.Query)
+	if h.config.LogLevel {
+		log.Printf("[server] executing command: %s", req.Query)
+	}
 
 	// Parse command and arguments from request
 	// The command comes in req.Query and needs to be split into command and arguments
@@ -690,7 +728,9 @@ func (h *Handler) handleCommand(ch *amqp.Channel, msg amqp.Delivery, req RPCRequ
 		Rows:    rows,
 	})
 
-	log.Printf("[server] command executed successfully, returned %d lines", len(rows))
+	if h.config.LogLevel {
+		log.Printf("[server] command executed successfully, returned %d lines", len(rows))
+	}
 }
 
 // handleFunction executes remote function calls with type-safe parameter conversion.
@@ -742,7 +782,9 @@ func (h *Handler) handleFunction(ch *amqp.Channel, msg amqp.Delivery, req RPCReq
 		Rows:    rows,
 	})
 
-	log.Printf("[server] function executed successfully")
+	if h.config.LogLevel {
+		log.Printf("[server] function executed successfully")
+	}
 }
 
 // executeFunction executes a function by name using Go's reflection system.
@@ -1133,23 +1175,29 @@ func (h *Handler) ClearCache() {
 // Note: This creates a new cache instance, clearing all existing cached data.
 func (h *Handler) SetCacheConfig(config QueryCacheConfig) {
 	h.queryCache = NewQueryCache(config)
-	log.Printf("[server] Cache configuration updated")
+	if h.config.LogLevel {
+		log.Printf("[server] Cache configuration updated")
+	}
 }
 
 // SetWorkerPoolConfig updates the worker pool configuration.
 // Note: This creates a new worker pool instance. Call before starting the server.
 func (h *Handler) SetWorkerPoolConfig(config *WorkerPoolConfig) {
 	h.workerPool = NewWorkerPool(h, config)
-	log.Printf("[server] Worker pool configuration updated: %d workers, queue size %d",
-		config.WorkerCount, config.QueueSize)
+	if h.config.LogLevel {
+		log.Printf("[server] Worker pool configuration updated: %d workers, queue size %d",
+			config.WorkerCount, config.QueueSize)
+	}
 }
 
 // SetRateLimiterConfig updates the rate limiter configuration.
 // Note: This creates a new rate limiter instance. Call before starting the server.
 func (h *Handler) SetRateLimiterConfig(config *RateLimiterConfig) {
 	h.rateLimiter = NewRateLimiter(config)
-	log.Printf("[server] Rate limiter configuration updated: %d req/s, burst %d",
-		config.RequestsPerSecond, config.BurstSize)
+	if h.config.LogLevel {
+		log.Printf("[server] Rate limiter configuration updated: %d req/s, burst %d",
+			config.RequestsPerSecond, config.BurstSize)
+	}
 }
 
 // GetSQLValidationStats returns current SQL validation statistics.
@@ -1160,8 +1208,10 @@ func (h *Handler) GetSQLValidationStats() ValidationStats {
 // SetSQLValidationConfig updates the SQL validation configuration.
 func (h *Handler) SetSQLValidationConfig(config SQLValidationConfig) {
 	h.sqlValidator.UpdateConfig(config)
-	log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v",
-		config.Enabled, config.StrictMode)
+	if h.config.LogLevel {
+		log.Printf("[server] SQL validation configuration updated: enabled=%v, strict=%v",
+			config.Enabled, config.StrictMode)
+	}
 }
 
 // GetCommandTimeout returns the current command timeout configuration.
@@ -1172,7 +1222,9 @@ func (h *Handler) GetCommandTimeout() time.Duration {
 // SetCommandTimeout updates the command timeout configuration.
 func (h *Handler) SetCommandTimeout(timeout time.Duration) {
 	h.commandTimeout = timeout
-	log.Printf("[server] Command timeout updated: %v", timeout)
+	if h.config.LogLevel {
+		log.Printf("[server] Command timeout updated: %v", timeout)
+	}
 }
 
 // GetSQLTimeout returns the current SQL timeout configuration.
@@ -1183,7 +1235,9 @@ func (h *Handler) GetSQLTimeout() time.Duration {
 // SetSQLTimeout updates the SQL timeout configuration.
 func (h *Handler) SetSQLTimeout(timeout time.Duration) {
 	h.sqlTimeout = timeout
-	log.Printf("[server] SQL timeout updated: %v", timeout)
+	if h.config.LogLevel {
+		log.Printf("[server] SQL timeout updated: %v", timeout)
+	}
 }
 
 // GetFunctionTimeout returns the current function timeout configuration.
@@ -1194,7 +1248,9 @@ func (h *Handler) GetFunctionTimeout() time.Duration {
 // SetFunctionTimeout updates the function timeout configuration.
 func (h *Handler) SetFunctionTimeout(timeout time.Duration) {
 	h.functionTimeout = timeout
-	log.Printf("[server] Function timeout updated: %v", timeout)
+	if h.config.LogLevel {
+		log.Printf("[server] Function timeout updated: %v", timeout)
+	}
 }
 
 // GetHeartbeatStats returns heartbeat statistics

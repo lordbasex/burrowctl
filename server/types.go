@@ -28,6 +28,7 @@ type PoolConfig struct {
 // - Heartbeat management for connection monitoring
 // - Separate queues for RPC and heartbeat operations
 type Handler struct {
+	config             *ServerConfig          // Configuration for the server
 	deviceID           string                 // Unique identifier for this device/server instance
 	amqpURL            string                 // RabbitMQ connection URL (amqp://user:pass@host:port/)
 	mysqlDSN           string                 // MySQL Data Source Name for database connections
