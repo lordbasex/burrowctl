@@ -22,24 +22,24 @@ services:
     networks:
       - burrow_network
 
-  rabbitmq:
-    container_name: rabbitmq-full-featured
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=burrowuser
-      - RABBITMQ_DEFAULT_PASS=burrowpass123
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    restart: always
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      timeout: 30s
-      retries: 10
-    networks:
-      - burrow_network
+  # rabbitmq:
+  #   container_name: rabbitmq-full-featured
+  #   image: rabbitmq:3-management
+  #   ports:
+  #     - "5672:5672"
+  #     - "15672:15672"
+  #   environment:
+  #     - RABBITMQ_DEFAULT_USER=burrowuser
+  #     - RABBITMQ_DEFAULT_PASS=burrowpass123
+  #   volumes:
+  #     - rabbitmq_data:/var/lib/rabbitmq
+  #   restart: always
+  #   healthcheck:
+  #     test: ["CMD", "rabbitmq-diagnostics", "ping"]
+  #     timeout: 30s
+  #     retries: 10
+  #   networks:
+  #     - burrow_network
 
   app:
     container_name: app
@@ -49,16 +49,18 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      # rabbitmq:
+      #   condition: service_healthy
     environment:
       - TZ=America/Argentina/Buenos_Aires
+      - CONNECTION_MODE=open # open or close
       
       # ========================================
       # CONFIGURACIÓN DE CONEXIÓN Y DISPOSITIVO
       # ========================================
       - DEVICE_ID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
-      - AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
+      # - AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
+      - AMPQ_URL=amqps://ehaP4O3gtM8kzEQe7EHy2hV918cIXv:6Zip9rGdJEwMzNlY5gVR22eOU28Wxx@amqp.iperfex.com:5671/
       - MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb-full-featured:3306)/burrowdb?parseTime=true
       
       # ========================================
@@ -135,7 +137,7 @@ services:
 
 volumes:
   mariadb_data:
-  rabbitmq_data:
+  # rabbitmq_data:
 
 networks:
   burrow_network:

@@ -19,6 +19,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -187,6 +188,27 @@ func (h *Handler) Start(ctx context.Context) error {
 
 	// Establish RabbitMQ connection
 	h.conn, err = amqp.Dial(h.amqpURL)
+
+	// check URL amqp o amqps
+	if strings.HasPrefix(h.amqpURL, "amqps://") {
+
+		// cortar url de amqpURL luego de la @ y el :
+		domain := strings.Split(h.amqpURL, "@")[1]
+		domain = strings.Split(domain, ":")[0]
+
+		log.Printf("[server] domain: %s", domain)
+
+		// TLS explícito con SNI (opcional pero recomendable)
+		tlsCfg := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: domain,
+		}
+
+		h.conn, err = amqp.DialTLS(h.amqpURL, tlsCfg)
+	} else {
+		h.conn, err = amqp.Dial(h.amqpURL)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}

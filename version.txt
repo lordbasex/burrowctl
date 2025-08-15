@@ -1,2 +1,2 @@
-initial_version: 1.7.3
-git_hash: 2555a91
+initial_version: 1.7.4
+git_hash: 0b2a1cc

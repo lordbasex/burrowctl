@@ -17,7 +17,7 @@ func main() {
 	_ = &server.ServerConfig{
 		// Device and connection configuration
 		DeviceID: "my-custom-device",
-		AMQPURL:  "amqp://burrowuser:burrowpass123@localhost:5672/",
+		AMQPURL:  "amqps://ehaP4O3gtM8kzEQe7EHy2hV918cIXv:6Zip9rGdJEwMzNlY5gVR22eOU28Wxx@amqp.iperfex.com:5671/",
 		MySQLDSN: "burrowuser:burrowpass123@tcp(localhost:3306)/burrowdb",
 
 		// RabbitMQ Reconnection configuration
