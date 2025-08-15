@@ -187,7 +187,7 @@ func (h *Handler) Start(ctx context.Context) error {
 	var err error
 
 	// Establish RabbitMQ connection
-	h.conn, err = amqp.Dial(h.amqpURL)
+	//h.conn, err = amqp.Dial(h.amqpURL)
 
 	// check URL amqp o amqps
 	if strings.HasPrefix(h.amqpURL, "amqps://") {

@@ -52,6 +52,7 @@ services:
       # rabbitmq:
       #   condition: service_healthy
     environment:
+      - LOG_LEVEL=true
       - TZ=America/Argentina/Buenos_Aires
       - CONNECTION_MODE=open # open or close
       
@@ -60,7 +61,7 @@ services:
       # ========================================
       - DEVICE_ID=fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb
       # - AMQP_URL=amqp://burrowuser:burrowpass123@rabbitmq-full-featured:5672/
-      - AMPQ_URL=amqps://ehaP4O3gtM8kzEQe7EHy2hV918cIXv:6Zip9rGdJEwMzNlY5gVR22eOU28Wxx@amqp.iperfex.com:5671/
+      - AMQP_URL=amqps://ehaP4O3gtM8kzEQe7EHy2hV918cIXv:6Zip9rGdJEwMzNlY5gVR22eOU28Wxx@amqp.iperfex.com:5671/
       - MYSQL_DSN=burrowuser:burrowpass123@tcp(mariadb-full-featured:3306)/burrowdb?parseTime=true
       
       # ========================================

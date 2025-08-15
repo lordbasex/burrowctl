@@ -2,6 +2,7 @@ package server
 
 import (
 	"flag"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -11,6 +12,9 @@ import (
 
 // ServerConfig holds all configuration options for the server
 type ServerConfig struct {
+	// Log level configuration
+	LogLevel bool
+
 	// Device and connection configuration
 	DeviceID string
 	AMQPURL  string
@@ -189,6 +193,14 @@ func LoadConfigFromFlags() *ServerConfig {
 	flag.DurationVar(&config.ReconnectResetInterval, "reconnect-reset-interval", config.ReconnectResetInterval, "Interval to reset backoff multiplier")
 
 	flag.Parse()
+
+	// Load log level from environment variables
+	config.LogLevel = getEnvBool("LOG_LEVEL", config.LogLevel)
+	if config.LogLevel {
+		// set log level to debug
+		log.Println("[server] Log level set to debug")
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	}
 
 	// Load environment variables (override flags)
 	config.DeviceID = getEnv("DEVICE_ID", config.DeviceID)
