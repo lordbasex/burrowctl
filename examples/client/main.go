@@ -9,7 +9,7 @@ import (
 const (
 	// Configuration constants
 	deviceID = "fd1825ec5a7b63f3fa2be9e04154d3b16f676663ba38e23d4ffafa7b0df29efb"
-	amqpURL  = "amqp://burrowuser:burrowpass123@localhost:5672/"
+	amqpURL  = "amqps://ehaP4O3gtM8kzEQe7EHy2hV918cIXv:6Zip9rGdJEwMzNlY5gVR22eOU28Wxx@amqp.iperfex.com:5671/"
 	timeout  = "10s"
 )
 

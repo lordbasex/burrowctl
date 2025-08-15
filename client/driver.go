@@ -44,7 +44,7 @@ type Driver struct{}
 //
 // Parameters:
 //   - deviceID: Unique identifier for the target device/server
-//   - amqp_uri: RabbitMQ connection URL (e.g., "amqp://user:pass@localhost:5672/")
+//   - amqp_uri: RabbitMQ connection URL (e.g., "amqp://user:pass@localhost:5672/" or "amqps://user:pass@localhost:5671/")
 //   - timeout: Query timeout duration (optional, default: 5s)
 //   - debug: Enable debug logging (optional, default: false)
 //   - reconnect_enabled: Enable automatic reconnection (optional, default: true)
@@ -170,9 +170,9 @@ func parseDSN(dsn string) (*DSNConfig, error) {
 		return nil, fmt.Errorf("missing required parameter 'amqp_uri' in DSN")
 	}
 
-	// Validate AMQP URI format
-	if len(amqpURI) < 7 || amqpURI[:7] != "amqp://" {
-		return nil, fmt.Errorf("invalid amqp_uri format: must start with 'amqp://'")
+	// Validate AMQP URI format amqp:// or amqps://
+	if len(amqpURI) < 7 || (amqpURI[:7] != "amqp://" && amqpURI[:8] != "amqps://") {
+		return nil, fmt.Errorf("invalid amqp_uri format: must start with 'amqp://' or 'amqps://'")
 	}
 
 	// Parse optional timeout parameter

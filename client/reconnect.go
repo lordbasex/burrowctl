@@ -1,8 +1,10 @@
 package client
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,7 +98,26 @@ func (cm *ConnectionManager) Connect() error {
 
 // doConnect performs the actual connection (must be called with mutex held).
 func (cm *ConnectionManager) doConnect() error {
-	conn, err := amqp.Dial(cm.connConfig.AMQPURL)
+
+	var err error
+
+	if strings.HasPrefix(cm.connConfig.AMQPURL, "amqps://") {
+
+		// cortar url de amqpURL luego de la @ y el :
+		domain := strings.Split(cm.connConfig.AMQPURL, "@")[1]
+		domain = strings.Split(domain, ":")[0]
+
+		// TLS explícito con SNI (opcional pero recomendable)
+		tlsCfg := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: domain,
+		}
+
+		cm.conn, err = amqp.DialTLS(cm.connConfig.AMQPURL, tlsCfg)
+	} else {
+		cm.conn, err = amqp.Dial(cm.connConfig.AMQPURL)
+	}
+
 	if err != nil {
 		cm.lastError = err
 		if cm.config.Enabled {
@@ -105,7 +126,6 @@ func (cm *ConnectionManager) doConnect() error {
 		return err
 	}
 
-	cm.conn = conn
 	cm.isConnected = true
 	cm.lastConnected = time.Now()
 	cm.attempts = 0

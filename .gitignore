@@ -85,6 +85,7 @@ examples/client/cache-example/cache-example
 examples/client/validation-example/validation-example
 
 # Server binaries
+examples/server/burrowctl-server
 examples/server/basic/server
 examples/server/advanced/advanced_server
 examples/server/advanced/cache-server/cache-server
