@@ -22,23 +22,23 @@ import (
 // - Cache statistics for monitoring
 // - Query normalization for consistent caching
 type QueryCache struct {
-	cache      map[string]*CacheEntry // Main cache storage
-	lruList    *LRUNode               // LRU linked list for eviction
-	config     QueryCacheConfig       // Cache configuration
-	mutex      sync.RWMutex           // Thread-safe access
-	stats      CacheStats             // Cache performance statistics
-	lastCleanup time.Time             // Last cleanup timestamp
+	cache       map[string]*CacheEntry // Main cache storage
+	lruList     *LRUNode               // LRU linked list for eviction
+	config      QueryCacheConfig       // Cache configuration
+	mutex       sync.RWMutex           // Thread-safe access
+	stats       CacheStats             // Cache performance statistics
+	lastCleanup time.Time              // Last cleanup timestamp
 }
 
 // CacheEntry represents a single cached query result with metadata.
 type CacheEntry struct {
-	Key        string              // Cache key (query hash)
-	Response   RPCResponse         // Cached query response
-	CreatedAt  time.Time           // When the entry was cached
-	AccessedAt time.Time           // Last access time
-	AccessCount int64              // Number of times accessed
-	prev       *CacheEntry         // Previous entry in LRU list
-	next       *CacheEntry         // Next entry in LRU list
+	Key         string      // Cache key (query hash)
+	Response    RPCResponse // Cached query response
+	CreatedAt   time.Time   // When the entry was cached
+	AccessedAt  time.Time   // Last access time
+	AccessCount int64       // Number of times accessed
+	prev        *CacheEntry // Previous entry in LRU list
+	next        *CacheEntry // Next entry in LRU list
 }
 
 // LRUNode represents the head of the LRU doubly-linked list.
@@ -50,31 +50,31 @@ type LRUNode struct {
 
 // QueryCacheConfig defines configuration options for the query cache.
 type QueryCacheConfig struct {
-	MaxSize        int           // Maximum number of cached entries
-	TTL            time.Duration // Time to live for cache entries
+	MaxSize         int           // Maximum number of cached entries
+	TTL             time.Duration // Time to live for cache entries
 	CleanupInterval time.Duration // How often to run cleanup (remove expired entries)
-	Enabled        bool          // Whether caching is enabled
+	Enabled         bool          // Whether caching is enabled
 }
 
 // CacheStats contains cache performance statistics.
 type CacheStats struct {
-	Hits           int64     // Number of cache hits
-	Misses         int64     // Number of cache misses
-	Evictions      int64     // Number of entries evicted
-	Expirations    int64     // Number of entries expired
-	TotalRequests  int64     // Total cache requests
-	LastCleanup    time.Time // Last cleanup time
-	CurrentSize    int       // Current number of cached entries
-	mutex          sync.RWMutex // Thread-safe stats access
+	Hits          int64        // Number of cache hits
+	Misses        int64        // Number of cache misses
+	Evictions     int64        // Number of entries evicted
+	Expirations   int64        // Number of entries expired
+	TotalRequests int64        // Total cache requests
+	LastCleanup   time.Time    // Last cleanup time
+	CurrentSize   int          // Current number of cached entries
+	mutex         sync.RWMutex // Thread-safe stats access
 }
 
 // DefaultQueryCacheConfig returns a default cache configuration optimized for typical workloads.
 func DefaultQueryCacheConfig() QueryCacheConfig {
 	return QueryCacheConfig{
-		MaxSize:         1000,               // Cache up to 1000 queries
-		TTL:             15 * time.Minute,   // Entries expire after 15 minutes
-		CleanupInterval: 5 * time.Minute,    // Cleanup every 5 minutes
-		Enabled:         true,               // Enable caching by default
+		MaxSize:         1000,             // Cache up to 1000 queries
+		TTL:             15 * time.Minute, // Entries expire after 15 minutes
+		CleanupInterval: 5 * time.Minute,  // Cleanup every 5 minutes
+		Enabled:         true,             // Enable caching by default
 	}
 }
 
@@ -97,14 +97,14 @@ func NewQueryCache(config QueryCacheConfig) *QueryCache {
 	}
 
 	cache := &QueryCache{
-		cache:   make(map[string]*CacheEntry),
-		lruList: &LRUNode{},
-		config:  config,
-		stats:   CacheStats{},
+		cache:       make(map[string]*CacheEntry),
+		lruList:     &LRUNode{},
+		config:      config,
+		stats:       CacheStats{},
 		lastCleanup: time.Now(),
 	}
 
-	log.Printf("[server] Query cache initialized: maxSize=%d, ttl=%v, cleanup=%v", 
+	log.Printf("[server] Query cache initialized: maxSize=%d, ttl=%v, cleanup=%v",
 		config.MaxSize, config.TTL, config.CleanupInterval)
 
 	return cache
@@ -219,7 +219,7 @@ func (qc *QueryCache) Clear() {
 
 	qc.cache = make(map[string]*CacheEntry)
 	qc.lruList = &LRUNode{}
-	
+
 	log.Printf("[server] Query cache cleared")
 }
 
@@ -272,10 +272,10 @@ func normalizeQuery(query string) string {
 	// Simple normalization: trim whitespace and convert to lowercase
 	// In a production system, you might want more sophisticated normalization
 	normalized := strings.TrimSpace(strings.ToLower(query))
-	
+
 	// Remove extra whitespace
 	normalized = strings.Join(strings.Fields(normalized), " ")
-	
+
 	return normalized
 }
 

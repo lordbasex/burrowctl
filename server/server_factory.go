@@ -72,7 +72,9 @@ func (sf *ServerFactory) StartServer(ctx context.Context) error {
 	monitoringManager.Start()
 
 	// Start server
-	log.Printf("🚀 Starting Full-Featured Enterprise Server...")
+	if sf.config.LogLevel {
+		log.Printf("🚀 Starting Full-Featured Enterprise Server...")
+	}
 	return handler.Start(ctx)
 }
 
