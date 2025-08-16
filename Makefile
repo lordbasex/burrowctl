@@ -43,11 +43,15 @@ $(shell echo "initial_version: $(VERSION)" > $(version_file))
 $(shell echo "git_hash: $(git_hash)" >> $(version_file))
 endif
 
+# TAG con formato correcto para Go (con prefijo v)
+TAG_VERSION := v$(VERSION)
+
 # Mensajes informativos
 $(info git_hash: $(git_hash))
 $(info last_version: $(last_version))
 $(info last_git_hash: $(last_git_hash))
 $(info next VERSION: $(VERSION))
+$(info TAG_VERSION: $(TAG_VERSION))
 
 # Configuración del proyecto
 PROJECT_NAME = burrowctl
@@ -68,9 +72,62 @@ help: ## Muestra esta ayuda
 	@echo "Uso: make [target]"
 	@echo ""
 	@echo "Targets disponibles:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 
-# Tareas de desarrollo
+# ==================== NUEVAS FUNCIONES DE RELEASE ====================
+
+.PHONY: commit-version
+commit-version: ## Commitea automáticamente los cambios en version.txt
+	@echo "$(GREEN)📝 Commiteando cambios en version.txt...$(NC)"
+	@if ! git diff --quiet $(version_file); then \
+		git add $(version_file); \
+		git commit -m "Update version to $(VERSION)"; \
+		echo "$(GREEN)✅ Version.txt actualizado y commiteado$(NC)"; \
+	else \
+		echo "$(BLUE)ℹ️  No hay cambios en version.txt para commitear$(NC)"; \
+	fi
+
+.PHONY: validate-go-version
+validate-go-version: ## Valida que Go puede ver la nueva versión
+	@echo "$(GREEN)🔍 Validando que Go reconoce la versión $(TAG_VERSION)...$(NC)"
+	@echo "$(BLUE)⏳ Esperando a que el proxy de Go se actualice...$(NC)"
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		echo "$(YELLOW)Intento $$i/10: Verificando $(TAG_VERSION)...$(NC)"; \
+		if go list -m $(MODULE_NAME)@$(TAG_VERSION) >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ Go reconoce la versión $(TAG_VERSION)!$(NC)"; \
+			go list -m $(MODULE_NAME)@$(TAG_VERSION); \
+			break; \
+		else \
+			if [ $$i -eq 10 ]; then \
+				echo "$(RED)❌ Go no puede encontrar la versión $(TAG_VERSION) después de 10 intentos$(NC)"; \
+				echo "$(YELLOW)💡 Verifica que el tag existe en el repositorio remoto:$(NC)"; \
+				echo "   git ls-remote --tags origin | grep $(TAG_VERSION)"; \
+				exit 1; \
+			fi; \
+			echo "$(YELLOW)⏳ Esperando 30 segundos antes del siguiente intento...$(NC)"; \
+			sleep 30; \
+		fi; \
+	done
+
+.PHONY: list-go-versions
+list-go-versions: ## Lista todas las versiones disponibles en Go
+	@echo "$(GREEN)📋 Listando versiones disponibles en Go...$(NC)"
+	@go clean -modcache >/dev/null 2>&1 || true
+	@go list -m -versions $(MODULE_NAME) || echo "$(YELLOW)⚠️  Error listando versiones. Puede que el módulo no esté disponible aún.$(NC)"
+
+.PHONY: validate-current-version
+validate-current-version: ## Valida que la versión actual está disponible en Go
+	@echo "$(GREEN)🔍 Validando versión actual $(TAG_VERSION)...$(NC)"
+	@if go list -m $(MODULE_NAME)@$(TAG_VERSION) >/dev/null 2>&1; then \
+		echo "$(GREEN)✅ La versión $(TAG_VERSION) está disponible en Go$(NC)"; \
+		go list -m $(MODULE_NAME)@$(TAG_VERSION); \
+	else \
+		echo "$(RED)❌ La versión $(TAG_VERSION) NO está disponible en Go$(NC)"; \
+		echo "$(BLUE)💡 Versiones disponibles:$(NC)"; \
+		go list -m -versions $(MODULE_NAME) 2>/dev/null || echo "Error obteniendo versiones"; \
+	fi
+
+# ==================== TAREAS DE DESARROLLO ====================
 .PHONY: install
 install: ## Instala dependencias
 	@echo "$(GREEN)📦 Instalando dependencias...$(NC)"
@@ -123,34 +180,54 @@ check-main-branch: ## Verifica que estés en la rama main
 	@echo "$(GREEN)✅ Estás en la rama main$(NC)"
 
 .PHONY: pre-release-checks
-pre-release-checks: check-main-branch check-git-clean ## Ejecuta todas las verificaciones antes del release
+pre-release-checks: check-main-branch check-git-clean check-tag-exists ## Ejecuta todas las verificaciones antes del release
 	@echo "$(GREEN)✅ Todas las verificaciones pasaron$(NC)"
 
-.PHONY: tag
-tag: pre-release-checks ## Crea solo el tag (sin push)
-	@echo "$(GREEN)🏷️  Creando tag $(VERSION)...$(NC)"
-	@if git tag -l | grep -q "^$(VERSION)$$"; then \
-		echo "$(RED)❌ Error: El tag $(VERSION) ya existe$(NC)"; \
+.PHONY: check-tag-exists
+check-tag-exists: ## Verifica si el tag ya existe
+	@echo "$(GREEN)🔍 Verificando si el tag $(TAG_VERSION) existe...$(NC)"
+	@if git tag -l | grep -q "^$(TAG_VERSION)$$"; then \
+		echo "$(RED)❌ Error: El tag $(TAG_VERSION) ya existe$(NC)"; \
+		echo "$(BLUE)💡 Tags existentes similares:$(NC)"; \
+		git tag -l | grep -E "v$$(echo $(VERSION) | sed 's/\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\1\.\2/')" | tail -5; \
 		exit 1; \
 	fi
-	git tag -a $(VERSION) -m "Release $(VERSION)"
-	@echo "$(GREEN)✅ Tag $(VERSION) creado$(NC)"
+	@echo "$(GREEN)✅ El tag $(TAG_VERSION) no existe, se puede crear$(NC)"
 
-.PHONY: push
-push: pre-release-checks ## Hace push del código, crea tag y release completo
-	@echo "$(GREEN)🏷️  Creando tag $(VERSION)...$(NC)"
-	@if git tag -l | grep -q "^$(VERSION)$$"; then \
-		echo "$(RED)❌ Error: El tag $(VERSION) ya existe$(NC)"; \
-		exit 1; \
-	fi
-	git tag -a $(VERSION) -m "Release $(VERSION)"
-	@echo "$(GREEN)✅ Tag $(VERSION) creado$(NC)"
-	@echo "$(GREEN)🚀 Haciendo push del código...$(NC)"
+.PHONY: create-tag
+create-tag: pre-release-checks commit-version ## Crea el tag con formato correcto para Go
+	@echo "$(GREEN)🏷️  Creando tag $(TAG_VERSION)...$(NC)"
+	git tag -a $(TAG_VERSION) -m "Release $(TAG_VERSION)"
+	@echo "$(GREEN)✅ Tag $(TAG_VERSION) creado localmente$(NC)"
+
+.PHONY: push-tag
+push-tag: ## Empuja el tag al repositorio remoto
+	@echo "$(GREEN)🚀 Enviando tag $(TAG_VERSION) al repositorio remoto...$(NC)"
+	git push origin $(TAG_VERSION)
+	@echo "$(GREEN)✅ Tag $(TAG_VERSION) enviado al repositorio remoto$(NC)"
+
+.PHONY: push-code
+push-code: ## Empuja el código al repositorio remoto
+	@echo "$(GREEN)🚀 Enviando código al repositorio remoto...$(NC)"
 	git push origin main
-	@echo "$(GREEN)🚀 Haciendo push de los tags...$(NC)"
-	git push origin --tags
-	@echo "$(GREEN)🎉 Release $(VERSION) completado exitosamente!$(NC)"
-	@echo "$(BLUE)Para verificar: git ls-remote --tags origin$(NC)"
+	@echo "$(GREEN)✅ Código enviado al repositorio remoto$(NC)"
+
+.PHONY: release
+release: create-tag push-code push-tag validate-go-version ## Crea tag, empuja código y valida que Go reconoce la versión
+	@echo "$(GREEN)🎉 Release $(TAG_VERSION) completado exitosamente!$(NC)"
+	@echo ""
+	@echo "$(BLUE)📋 Resumen del release:$(NC)"
+	@echo "  - Versión: $(VERSION)"
+	@echo "  - Tag: $(TAG_VERSION)"
+	@echo "  - Módulo: $(MODULE_NAME)"
+	@echo ""
+	@echo "$(BLUE)🔧 Para usar en otros proyectos:$(NC)"
+	@echo "  go get $(MODULE_NAME)@$(TAG_VERSION)"
+	@echo "  go get $(MODULE_NAME)@latest"
+	@echo ""
+	@echo "$(BLUE)🔍 Para verificar manualmente:$(NC)"
+	@echo "  go list -m $(MODULE_NAME)@$(TAG_VERSION)"
+	@echo "  go list -m -versions $(MODULE_NAME)"
 
 .PHONY: push-only
 push-only: ## Hace solo push del código y tags (sin crear nuevo tag)
@@ -160,13 +237,25 @@ push-only: ## Hace solo push del código y tags (sin crear nuevo tag)
 	git push origin --tags
 	@echo "$(GREEN)✅ Push completado$(NC)"
 
-.PHONY: release
-release: push ## Crea tag y hace push (versión completa) - alias de push
+.PHONY: release-with-version
+release-with-version: ## Release con versión específica (uso: make release-with-version VERSION=1.9.0)
+ifndef VERSION
+	$(error VERSION es requerido. Uso: make release-with-version VERSION=1.9.0)
+endif
+	@echo "$(GREEN)🚀 Iniciando release con versión específica $(VERSION)...$(NC)"
+	@echo "initial_version: $(VERSION)" > $(version_file)
+	@echo "git_hash: $(git_hash)" >> $(version_file)
+	$(MAKE) release VERSION=$(VERSION) TAG_VERSION=v$(VERSION)
 
 .PHONY: quick-release
-quick-release: ## Release rápido con VERSION por defecto
+quick-release: ## Release rápido con validación automática
 	@echo "$(GREEN)🚀 Iniciando release rápido con versión $(VERSION)...$(NC)"
-	$(MAKE) release VERSION=$(VERSION)
+	@echo "$(BLUE)📋 Configuración:$(NC)"
+	@echo "  - Versión: $(VERSION)"
+	@echo "  - Tag: $(TAG_VERSION)"
+	@echo "  - Hash Git: $(git_hash)"
+	@echo ""
+	$(MAKE) release
 
 # Información del proyecto
 .PHONY: info
@@ -175,10 +264,11 @@ info: ## Muestra información del proyecto
 	@echo "  Nombre: $(PROJECT_NAME)"
 	@echo "  Módulo: $(MODULE_NAME)"
 	@echo "  Versión Go: $(GO_VERSION)"
-	@echo "  Versión por defecto: $(VERSION)"
+	@echo "  Versión actual: $(VERSION)"
+	@echo "  Tag actual: $(TAG_VERSION)"
 	@echo "  Rama actual: $$(git branch --show-current)"
 	@echo "  Último commit: $$(git log -1 --oneline)"
-	@echo "  Tags existentes: $$(git tag -l | tail -5 | tr '\n' ' ')"
+	@echo "  Tags recientes: $$(git tag -l | grep '^v' | tail -5 | tr '\n' ' ')"
 
 # Tareas para ejemplos
 .PHONY: build-examples

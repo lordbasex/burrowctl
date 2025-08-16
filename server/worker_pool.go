@@ -22,23 +22,24 @@ import (
 // - Worker lifecycle management and monitoring
 // - Backpressure handling when queue is full
 type WorkerPool struct {
-	workerCount int                      // Number of worker goroutines
-	queue       chan MessageTask         // Channel for queuing incoming messages
-	handler     *Handler                 // Reference to the main handler
-	ctx         context.Context          // Context for shutdown coordination
-	cancel      context.CancelFunc       // Cancel function for shutdown
-	wg          sync.WaitGroup           // WaitGroup for graceful shutdown
-	started     bool                     // Whether the pool has been started
-	mutex       sync.RWMutex             // Mutex for thread-safe operations
+	workerCount int                // Number of worker goroutines
+	queue       chan MessageTask   // Channel for queuing incoming messages
+	handler     *Handler           // Reference to the main handler
+	ctx         context.Context    // Context for shutdown coordination
+	cancel      context.CancelFunc // Cancel function for shutdown
+	wg          sync.WaitGroup     // WaitGroup for graceful shutdown
+	started     bool               // Whether the pool has been started
+	mutex       sync.RWMutex       // Mutex for thread-safe operations
+	logLevel    bool               // Whether to enable detailed logging
 }
 
 // MessageTask represents a message processing task for the worker pool.
 // It contains all necessary information for a worker to process a message
 // and send the response back to the client.
 type MessageTask struct {
-	Channel   *amqp.Channel   // RabbitMQ channel for responding
-	Message   amqp.Delivery   // The incoming message to process
-	Timestamp time.Time       // When the task was created (for monitoring)
+	Channel   *amqp.Channel // RabbitMQ channel for responding
+	Message   amqp.Delivery // The incoming message to process
+	Timestamp time.Time     // When the task was created (for monitoring)
 }
 
 // WorkerPoolConfig holds configuration options for the worker pool.
@@ -87,6 +88,7 @@ func NewWorkerPool(handler *Handler, config *WorkerPoolConfig) *WorkerPool {
 		ctx:         ctx,
 		cancel:      cancel,
 		started:     false,
+		logLevel:    handler.config.LogLevel, // Get log level from handler config
 	}
 }
 
@@ -103,8 +105,10 @@ func (wp *WorkerPool) Start() error {
 		return fmt.Errorf("worker pool already started")
 	}
 
-	log.Printf("[server] Starting worker pool with %d workers, queue size %d", 
-		wp.workerCount, cap(wp.queue))
+	if wp.logLevel {
+		log.Printf("[server] Starting worker pool with %d workers, queue size %d",
+			wp.workerCount, cap(wp.queue))
+	}
 
 	// Start worker goroutines
 	for i := 0; i < wp.workerCount; i++ {
@@ -113,7 +117,9 @@ func (wp *WorkerPool) Start() error {
 	}
 
 	wp.started = true
-	log.Printf("[server] Worker pool started successfully")
+	if wp.logLevel {
+		log.Printf("[server] Worker pool started successfully")
+	}
 	return nil
 }
 
@@ -133,7 +139,9 @@ func (wp *WorkerPool) Stop(timeout time.Duration) error {
 	}
 	wp.mutex.Unlock()
 
-	log.Printf("[server] Stopping worker pool...")
+	if wp.logLevel {
+		log.Printf("[server] Stopping worker pool...")
+	}
 
 	// Signal shutdown to all workers
 	wp.cancel()
@@ -147,10 +155,14 @@ func (wp *WorkerPool) Stop(timeout time.Duration) error {
 
 	select {
 	case <-done:
-		log.Printf("[server] Worker pool stopped successfully")
+		if wp.logLevel {
+			log.Printf("[server] Worker pool stopped successfully")
+		}
 		return nil
 	case <-time.After(timeout):
-		log.Printf("[server] Worker pool shutdown timeout exceeded")
+		if wp.logLevel {
+			log.Printf("[server] Worker pool shutdown timeout exceeded")
+		}
 		return fmt.Errorf("worker pool shutdown timeout")
 	}
 }
@@ -178,7 +190,9 @@ func (wp *WorkerPool) SubmitTask(task MessageTask) error {
 		return fmt.Errorf("worker pool is shutting down")
 	default:
 		// Queue is full, this could implement backpressure logic
-		log.Printf("[server] Worker pool queue is full, dropping message")
+		if wp.logLevel {
+			log.Printf("[server] Worker pool queue is full, dropping message")
+		}
 		return fmt.Errorf("worker pool queue is full")
 	}
 }
@@ -190,13 +204,17 @@ func (wp *WorkerPool) SubmitTask(task MessageTask) error {
 //   - id: Worker identifier for logging
 func (wp *WorkerPool) worker(id int) {
 	defer wp.wg.Done()
-	
-	log.Printf("[server] Worker %d started", id)
+
+	if wp.logLevel {
+		log.Printf("[server] Worker %d started", id)
+	}
 
 	for {
 		select {
 		case <-wp.ctx.Done():
-			log.Printf("[server] Worker %d shutting down", id)
+			if wp.logLevel {
+				log.Printf("[server] Worker %d shutting down", id)
+			}
 			return
 
 		case task := <-wp.queue:
@@ -213,7 +231,7 @@ func (wp *WorkerPool) worker(id int) {
 //   - task: The message task to process
 func (wp *WorkerPool) processTask(workerID int, task MessageTask) {
 	start := time.Now()
-	
+
 	// Create timeout context for this specific task
 	ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
 	defer cancel()
@@ -221,8 +239,10 @@ func (wp *WorkerPool) processTask(workerID int, task MessageTask) {
 	// Recovery from panics in message processing
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[server] Worker %d panic recovered: %v", workerID, r)
-			
+			if wp.logLevel {
+				log.Printf("[server] Worker %d panic recovered: %v", workerID, r)
+			}
+
 			// Send error response if possible
 			errorResp := RPCResponse{
 				Error: fmt.Sprintf("Internal server error: %v", r),
@@ -239,14 +259,18 @@ func (wp *WorkerPool) processTask(workerID int, task MessageTask) {
 
 	// Log task processing start
 	queueTime := start.Sub(task.Timestamp)
-	log.Printf("[server] Worker %d processing message (queue time: %v)", workerID, queueTime)
+	if wp.logLevel {
+		log.Printf("[server] Worker %d processing message (queue time: %v)", workerID, queueTime)
+	}
 
 	// Process the message using the existing handler logic
 	wp.handler.handleMessage(task.Channel, task.Message)
 
 	// Log completion
 	processingTime := time.Since(start)
-	log.Printf("[server] Worker %d completed message (processing time: %v)", workerID, processingTime)
+	if wp.logLevel {
+		log.Printf("[server] Worker %d completed message (processing time: %v)", workerID, processingTime)
+	}
 }
 
 // GetStats returns current statistics about the worker pool.
@@ -259,10 +283,10 @@ func (wp *WorkerPool) GetStats() WorkerPoolStats {
 	defer wp.mutex.RUnlock()
 
 	return WorkerPoolStats{
-		WorkerCount:    wp.workerCount,
-		QueueSize:      cap(wp.queue),
-		QueuedTasks:    len(wp.queue),
-		IsRunning:      wp.started && wp.ctx.Err() == nil,
+		WorkerCount: wp.workerCount,
+		QueueSize:   cap(wp.queue),
+		QueuedTasks: len(wp.queue),
+		IsRunning:   wp.started && wp.ctx.Err() == nil,
 	}
 }
 
