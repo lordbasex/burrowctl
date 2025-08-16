@@ -44,6 +44,9 @@ func (sf *ServerFactory) CreateServer() (*Handler, *MonitoringManager, error) {
 	// Configure rate limiter
 	handler.SetRateLimiterConfig(sf.config.ToRateLimiterConfig())
 
+	// Configure transaction manager log level
+	handler.SetTransactionManagerLogLevel(sf.config.LogLevel)
+
 	// Configure heartbeat manager with custom configuration
 	heartbeatConfig := sf.config.ToHeartbeatConfig()
 	handler.heartbeatManager = NewServerHeartbeatManager(sf.config.DeviceID, heartbeatConfig)

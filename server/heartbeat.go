@@ -16,6 +16,7 @@ type ServerHeartbeatConfig struct {
 	ResponseTimeout time.Duration // How long to wait before responding to heartbeat
 	CleanupInterval time.Duration // How often to cleanup stale client connections
 	MaxClientAge    time.Duration // Maximum age of client connection before cleanup
+	LogLevel        bool          // Whether to enable detailed logging
 }
 
 // DefaultServerHeartbeatConfig returns sensible default server heartbeat configuration
@@ -25,6 +26,7 @@ func DefaultServerHeartbeatConfig() *ServerHeartbeatConfig {
 		ResponseTimeout: 100 * time.Millisecond, // Quick response
 		CleanupInterval: 2 * time.Minute,        // Cleanup every 2 minutes
 		MaxClientAge:    3 * time.Minute,        // Remove clients older than 3 minutes
+		LogLevel:        false,                  // Default: minimal logging
 	}
 }
 
@@ -73,26 +75,34 @@ func (shm *ServerHeartbeatManager) Start() {
 	}
 
 	go shm.cleanupLoop()
-	log.Printf("[server-heartbeat] Started heartbeat management for device %s", shm.deviceID)
+	if shm.config.LogLevel {
+		log.Printf("[server-heartbeat] Started heartbeat management for device %s", shm.deviceID)
+	}
 }
 
 // Stop stops server heartbeat management
 func (shm *ServerHeartbeatManager) Stop() {
 	close(shm.stopChan)
-	log.Printf("[server-heartbeat] Stopped heartbeat management for device %s", shm.deviceID)
+	if shm.config.LogLevel {
+		log.Printf("[server-heartbeat] Stopped heartbeat management for device %s", shm.deviceID)
+	}
 }
 
 // HandleHeartbeatPing processes a heartbeat PING request from a client
 func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amqp.Delivery) {
 	if !shm.config.Enabled {
-		log.Printf("[server-heartbeat] Heartbeat disabled, ignoring ping")
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Heartbeat disabled, ignoring ping")
+		}
 		return
 	}
 
 	// Validate message body is not empty
 	if len(msg.Body) == 0 {
-		log.Printf("[server-heartbeat] Received empty heartbeat message from %s (correlation: %s)",
-			msg.ReplyTo, msg.CorrelationId)
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Received empty heartbeat message from %s (correlation: %s)",
+				msg.ReplyTo, msg.CorrelationId)
+		}
 		return
 	}
 
@@ -101,37 +111,49 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
 	if len(bodyStr) > 200 {
 		bodyStr = bodyStr[:200] + "..."
 	}
-	log.Printf("[server-heartbeat] Processing heartbeat message: %s", bodyStr)
+	if shm.config.LogLevel {
+		log.Printf("[server-heartbeat] Processing heartbeat message: %s", bodyStr)
+	}
 
 	var ping map[string]interface{}
 	if err := json.Unmarshal(msg.Body, &ping); err != nil {
-		log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body: %s)", err, string(msg.Body))
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body: %s)", err, string(msg.Body))
+		}
 		return
 	}
 
 	// Validate required fields with detailed logging
 	deviceID, ok := ping["deviceID"].(string)
 	if !ok {
-		log.Printf("[server-heartbeat] Missing or invalid deviceID in heartbeat ping (got: %T)", ping["deviceID"])
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Missing or invalid deviceID in heartbeat ping (got: %T)", ping["deviceID"])
+		}
 		return
 	}
 
 	clientIP, ok := ping["clientIP"].(string)
 	if !ok {
-		log.Printf("[server-heartbeat] Missing or invalid clientIP in heartbeat ping (got: %T)", ping["clientIP"])
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Missing or invalid clientIP in heartbeat ping (got: %T)", ping["clientIP"])
+		}
 		return
 	}
 
 	corrID, ok := ping["corrID"].(string)
 	if !ok {
-		log.Printf("[server-heartbeat] Missing or invalid corrID in heartbeat ping (got: %T)", ping["corrID"])
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Missing or invalid corrID in heartbeat ping (got: %T)", ping["corrID"])
+		}
 		return
 	}
 
 	// Verify this server handles this device
 	if deviceID != shm.deviceID {
-		log.Printf("[server-heartbeat] Ignoring heartbeat for device %s (this server handles %s)",
-			deviceID, shm.deviceID)
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Ignoring heartbeat for device %s (this server handles %s)",
+				deviceID, shm.deviceID)
+		}
 		return
 	}
 
@@ -144,7 +166,9 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
 			ClientIP: clientIP,
 		}
 		shm.clients[clientIP] = client
-		log.Printf("[server-heartbeat] New client registered: %s", clientIP)
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] New client registered: %s", clientIP)
+		}
 	}
 
 	client.LastPing = time.Now()
@@ -155,8 +179,10 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
 	// Respond with PONG
 	shm.sendHeartbeatPong(ch, msg.ReplyTo, corrID, deviceID, clientIP)
 
-	log.Printf("[server-heartbeat] PING received from %s (device: %s, total pings: %d)",
-		clientIP, deviceID, client.PingCount)
+	if shm.config.LogLevel {
+		log.Printf("[server-heartbeat] PING received from %s (device: %s, total pings: %d)",
+			clientIP, deviceID, client.PingCount)
+	}
 }
 
 // sendHeartbeatPong sends a heartbeat PONG response to the client
@@ -181,9 +207,13 @@ func (shm *ServerHeartbeatManager) sendHeartbeatPong(ch *amqp.Channel, replyTo, 
 	})
 
 	if err != nil {
-		log.Printf("[server-heartbeat] Failed to send PONG to %s: %v", clientIP, err)
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Failed to send PONG to %s: %v", clientIP, err)
+		}
 	} else {
-		log.Printf("[server-heartbeat] PONG sent to %s", clientIP)
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] PONG sent to %s", clientIP)
+		}
 	}
 }
 
@@ -214,23 +244,27 @@ func (shm *ServerHeartbeatManager) cleanupStaleConnections() {
 		if now.Sub(client.LastPing) > shm.config.MaxClientAge {
 			// Log specifically about heartbeat timeout disconnection
 			timeoutDuration := now.Sub(client.LastPing)
-			log.Printf("[server-heartbeat] ⚠️  CLIENT DISCONNECTED BY TIMEOUT: %s (device: %s)",
-				clientIP, client.DeviceID)
-			log.Printf("[server-heartbeat] 💔 HEARTBEAT CLOSED: Client %s exceeded timeout (no PING for %v, max allowed: %v)",
-				clientIP, timeoutDuration, shm.config.MaxClientAge)
-			log.Printf("[server-heartbeat] 📊 Connection stats - Total PINGs received: %d, Last PING: %v",
-				client.PingCount, client.LastPing.Format("15:04:05"))
+			if shm.config.LogLevel {
+				log.Printf("[server-heartbeat] ⚠️  CLIENT DISCONNECTED BY TIMEOUT: %s (device: %s)",
+					clientIP, client.DeviceID)
+				log.Printf("[server-heartbeat] 💔 HEARTBEAT CLOSED: Client %s exceeded timeout (no PING for %v, max allowed: %v)",
+					clientIP, timeoutDuration, shm.config.MaxClientAge)
+				log.Printf("[server-heartbeat] 📊 Connection stats - Total PINGs received: %d, Last PING: %v",
+					client.PingCount, client.LastPing.Format("15:04:05"))
+			}
 
 			client.IsActive = false
 			removed++
 
 			// Additional log for the original inactive marking
-			log.Printf("[server-heartbeat] Client %s marked as inactive (no PING for %v)",
-				clientIP, now.Sub(client.LastPing))
+			if shm.config.LogLevel {
+				log.Printf("[server-heartbeat] Client %s marked as inactive (no PING for %v)",
+					clientIP, now.Sub(client.LastPing))
+			}
 		}
 	}
 
-	if removed > 0 {
+	if removed > 0 && shm.config.LogLevel {
 		log.Printf("[server-heartbeat] 🧹 Cleaned up %d inactive clients due to heartbeat timeout", removed)
 	}
 }

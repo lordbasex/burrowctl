@@ -104,7 +104,7 @@ func NewHandler(deviceID, amqpURL, mysqlDSN, mode string, poolConf *PoolConfig, 
 		sqlTimeout:         sqlTimeout,                                    // Set SQL timeout
 		functionTimeout:    functionTimeout,                               // Set function timeout
 		functionRegistry:   make(map[string]interface{}),                  // Initialize empty function registry
-		transactionManager: NewTransactionManager(),                       // Initialize transaction manager
+		transactionManager: NewTransactionManager(false),                  // Initialize transaction manager (LogLevel will be set later)
 		queryCache:         NewQueryCache(DefaultQueryCacheConfig()),      // Initialize query cache
 		sqlValidator:       NewSQLValidator(DefaultSQLValidationConfig()), // Initialize SQL validator
 
@@ -144,7 +144,9 @@ func (h *Handler) RegisterFunction(name string, function interface{}) {
 	}
 	h.functionRegistry[name] = function
 
-	log.Printf("[server] Function '%s' registered", name)
+	if h.config.LogLevel {
+		log.Printf("[server] Function '%s' registered", name)
+	}
 }
 
 // RegisterFunctions registers multiple functions at once for batch registration.
@@ -764,7 +766,9 @@ func (h *Handler) handleFunction(ch *amqp.Channel, msg amqp.Delivery, req RPCReq
 	ctx, cancel := context.WithTimeout(context.Background(), h.functionTimeout)
 	defer cancel()
 
-	log.Printf("[server] executing function: %s", req.Query)
+	if h.config.LogLevel {
+		log.Printf("[server] executing function: %s", req.Query)
+	}
 
 	// Parse function request from JSON in req.Query
 	var funcReq FunctionRequest
@@ -1132,7 +1136,9 @@ func (h *Handler) transactionCleanupLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[server] Transaction cleanup loop shutting down...")
+			if h.config.LogLevel {
+				log.Printf("[server] Transaction cleanup loop shutting down...")
+			}
 			return
 		case <-ticker.C:
 			// Clean up transactions older than 30 minutes
@@ -1189,6 +1195,11 @@ func (h *Handler) SetCacheConfig(config QueryCacheConfig) {
 	if h.config.LogLevel {
 		log.Printf("[server] Cache configuration updated")
 	}
+}
+
+// SetTransactionManagerLogLevel updates the log level for the transaction manager.
+func (h *Handler) SetTransactionManagerLogLevel(logLevel bool) {
+	h.transactionManager.SetLogLevel(logLevel)
 }
 
 // SetWorkerPoolConfig updates the worker pool configuration.

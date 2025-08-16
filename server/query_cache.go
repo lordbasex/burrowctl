@@ -54,6 +54,7 @@ type QueryCacheConfig struct {
 	TTL             time.Duration // Time to live for cache entries
 	CleanupInterval time.Duration // How often to run cleanup (remove expired entries)
 	Enabled         bool          // Whether caching is enabled
+	LogLevel        bool          // Whether to enable detailed logging
 }
 
 // CacheStats contains cache performance statistics.
@@ -75,6 +76,7 @@ func DefaultQueryCacheConfig() QueryCacheConfig {
 		TTL:             15 * time.Minute, // Entries expire after 15 minutes
 		CleanupInterval: 5 * time.Minute,  // Cleanup every 5 minutes
 		Enabled:         true,             // Enable caching by default
+		LogLevel:        false,            // Default: minimal logging
 	}
 }
 
@@ -104,8 +106,10 @@ func NewQueryCache(config QueryCacheConfig) *QueryCache {
 		lastCleanup: time.Now(),
 	}
 
-	log.Printf("[server] Query cache initialized: maxSize=%d, ttl=%v, cleanup=%v",
-		config.MaxSize, config.TTL, config.CleanupInterval)
+	if config.LogLevel {
+		log.Printf("[server] Query cache initialized: maxSize=%d, ttl=%v, cleanup=%v",
+			config.MaxSize, config.TTL, config.CleanupInterval)
+	}
 
 	return cache
 }
@@ -220,7 +224,9 @@ func (qc *QueryCache) Clear() {
 	qc.cache = make(map[string]*CacheEntry)
 	qc.lruList = &LRUNode{}
 
-	log.Printf("[server] Query cache cleared")
+	if qc.config.LogLevel {
+		log.Printf("[server] Query cache cleared")
+	}
 }
 
 // GetStats returns current cache statistics.
@@ -341,7 +347,9 @@ func (qc *QueryCache) evictLRU() {
 	qc.removeEntry(lru)
 	qc.recordEviction()
 
-	log.Printf("[server] Evicted LRU cache entry: %s", lru.Key[:16]+"...")
+	if qc.config.LogLevel {
+		log.Printf("[server] Evicted LRU cache entry: %s", lru.Key[:16]+"...")
+	}
 }
 
 // cleanupExpired removes expired entries from the cache.
@@ -369,7 +377,7 @@ func (qc *QueryCache) cleanupExpired() {
 
 	qc.lastCleanup = now
 
-	if len(expiredKeys) > 0 {
+	if len(expiredKeys) > 0 && qc.config.LogLevel {
 		log.Printf("[server] Cleaned up %d expired cache entries", len(expiredKeys))
 	}
 }

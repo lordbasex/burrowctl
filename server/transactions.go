@@ -16,22 +16,24 @@ import (
 type TransactionManager struct {
 	transactions map[string]*Transaction // Active transactions indexed by transaction ID
 	mutex        sync.RWMutex            // Thread-safe access to transactions map
+	logLevel     bool                    // Whether to enable detailed logging
 }
 
 // Transaction represents an active database transaction.
 // It maintains the transaction state, database connection, and metadata.
 type Transaction struct {
-	ID        string         // Unique transaction identifier
-	Tx        *sql.Tx        // Database transaction instance
-	StartTime time.Time      // When the transaction was started
-	LastUsed  time.Time      // Last time the transaction was used
-	mutex     sync.RWMutex   // Thread-safe access to transaction state
+	ID        string       // Unique transaction identifier
+	Tx        *sql.Tx      // Database transaction instance
+	StartTime time.Time    // When the transaction was started
+	LastUsed  time.Time    // Last time the transaction was used
+	mutex     sync.RWMutex // Thread-safe access to transaction state
 }
 
 // NewTransactionManager creates a new transaction manager instance.
-func NewTransactionManager() *TransactionManager {
+func NewTransactionManager(logLevel bool) *TransactionManager {
 	return &TransactionManager{
 		transactions: make(map[string]*Transaction),
+		logLevel:     logLevel,
 	}
 }
 
@@ -70,7 +72,9 @@ func (tm *TransactionManager) BeginTransaction(transactionID string, db *sql.DB)
 	// Register transaction
 	tm.transactions[transactionID] = transaction
 
-	log.Printf("[server] Transaction started: %s", transactionID)
+	if tm.logLevel {
+		log.Printf("[server] Transaction started: %s", transactionID)
+	}
 	return transaction, nil
 }
 
@@ -122,7 +126,9 @@ func (tm *TransactionManager) CommitTransaction(transactionID string) error {
 	delete(tm.transactions, transactionID)
 
 	duration := time.Since(transaction.StartTime)
-	log.Printf("[server] Transaction committed: %s (duration: %v)", transactionID, duration)
+	if tm.logLevel {
+		log.Printf("[server] Transaction committed: %s (duration: %v)", transactionID, duration)
+	}
 	return nil
 }
 
@@ -152,7 +158,9 @@ func (tm *TransactionManager) RollbackTransaction(transactionID string) error {
 	delete(tm.transactions, transactionID)
 
 	duration := time.Since(transaction.StartTime)
-	log.Printf("[server] Transaction rolled back: %s (duration: %v)", transactionID, duration)
+	if tm.logLevel {
+		log.Printf("[server] Transaction rolled back: %s (duration: %v)", transactionID, duration)
+	}
 	return nil
 }
 
@@ -180,18 +188,29 @@ func (tm *TransactionManager) CleanupExpiredTransactions(maxAge time.Duration) {
 	// Clean up expired transactions
 	for _, id := range expiredIDs {
 		transaction := tm.transactions[id]
-		
+
 		// Force rollback the database transaction
 		if err := transaction.Tx.Rollback(); err != nil {
-			log.Printf("[server] Error rolling back expired transaction %s: %v", id, err)
+			if tm.logLevel {
+				log.Printf("[server] Error rolling back expired transaction %s: %v", id, err)
+			}
 		}
-		
+
 		// Remove from registry
 		delete(tm.transactions, id)
-		
+
 		duration := time.Since(transaction.StartTime)
-		log.Printf("[server] Expired transaction cleaned up: %s (duration: %v)", id, duration)
+		if tm.logLevel {
+			log.Printf("[server] Expired transaction cleaned up: %s (duration: %v)", id, duration)
+		}
 	}
+}
+
+// SetLogLevel updates the log level for the transaction manager
+func (tm *TransactionManager) SetLogLevel(logLevel bool) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	tm.logLevel = logLevel
 }
 
 // GetStats returns statistics about active transactions.
@@ -212,7 +231,7 @@ func (tm *TransactionManager) GetStats() map[string]interface{} {
 			"last_used": transaction.LastUsed.Format(time.RFC3339),
 		}
 		transaction.mutex.RUnlock()
-		
+
 		stats["transactions"] = append(stats["transactions"].([]map[string]interface{}), txStats)
 	}
 

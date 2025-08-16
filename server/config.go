@@ -295,6 +295,7 @@ func (sc *ServerConfig) ToQueryCacheConfig() QueryCacheConfig {
 		TTL:             sc.CacheTTL,
 		CleanupInterval: sc.CacheCleanup,
 		Enabled:         sc.CacheEnabled,
+		LogLevel:        sc.LogLevel, // Pass through the LogLevel setting
 	}
 }
 
@@ -387,6 +388,7 @@ func (sc *ServerConfig) ToHeartbeatConfig() *ServerHeartbeatConfig {
 		ResponseTimeout: sc.HeartbeatTimeout,
 		CleanupInterval: sc.HeartbeatCleanup,
 		MaxClientAge:    sc.HeartbeatMaxClientAge,
+		LogLevel:        sc.LogLevel, // Pass through the LogLevel setting
 	}
 }
 
