@@ -1,2 +1,2 @@
-initial_version: 1.8.3
-git_hash: 75ad294
+initial_version: 1.8.4
+git_hash: c368f9b
