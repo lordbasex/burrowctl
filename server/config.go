@@ -311,6 +311,7 @@ func (sc *ServerConfig) ToSQLValidationConfig() SQLValidationConfig {
 		MaxQueryLength:        sc.MaxQueryLength,
 		StrictMode:            sc.StrictMode,
 		LogViolations:         sc.LogViolations,
+		LogLevel:              sc.LogLevel, // Pass through the LogLevel setting
 	}
 }
 

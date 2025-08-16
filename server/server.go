@@ -143,6 +143,7 @@ func (h *Handler) RegisterFunction(name string, function interface{}) {
 		h.functionRegistry = make(map[string]interface{})
 	}
 	h.functionRegistry[name] = function
+
 	log.Printf("[server] Function '%s' registered", name)
 }
 
@@ -161,7 +162,9 @@ func (h *Handler) RegisterFunctions(functions map[string]interface{}) {
 	for name, function := range functions {
 		h.functionRegistry[name] = function
 	}
-	log.Printf("[server] %d functions registered", len(functions))
+	if h.config.LogLevel {
+		log.Printf("[server] %d functions registered", len(functions))
+	}
 }
 
 // GetRegisteredFunctions returns a list of all registered function names.

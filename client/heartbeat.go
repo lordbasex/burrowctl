@@ -18,6 +18,7 @@ type HeartbeatConfig struct {
 	Timeout         time.Duration // How long to wait for heartbeat response
 	MaxMissedBeats  int           // Maximum missed heartbeats before considering connection dead
 	DisconnectDelay time.Duration // Delay before disconnecting after missed heartbeats
+	LogLevel        bool          // Whether to enable detailed logging
 }
 
 // DefaultHeartbeatConfig returns sensible default heartbeat configuration
@@ -28,6 +29,7 @@ func DefaultHeartbeatConfig() *HeartbeatConfig {
 		Timeout:         10 * time.Second, // Wait 10 seconds for response
 		MaxMissedBeats:  3,                // Allow 3 missed heartbeats
 		DisconnectDelay: 5 * time.Second,  // Wait 5 seconds before disconnecting
+		LogLevel:        false,            // Default: minimal logging
 	}
 }
 
@@ -90,7 +92,9 @@ func (hm *HeartbeatManager) ActivateHeartbeat() {
 			go hm.monitorLoop()
 		}
 
-		log.Printf("[heartbeat] Heartbeat activated for device %s", hm.deviceID)
+		if hm.config.LogLevel {
+			log.Printf("[heartbeat] Heartbeat activated for device %s", hm.deviceID)
+		}
 	}
 
 	// Send activation signal
@@ -107,7 +111,9 @@ func (hm *HeartbeatManager) DeactivateHeartbeat() {
 
 	if hm.isActive {
 		hm.isActive = false
-		log.Printf("[heartbeat] Heartbeat deactivated for device %s", hm.deviceID)
+		if hm.config.LogLevel {
+			log.Printf("[heartbeat] Heartbeat deactivated for device %s", hm.deviceID)
+		}
 	}
 
 	// Send deactivation signal
@@ -224,7 +230,9 @@ func (hm *HeartbeatManager) handleHeartbeatResponse() {
 	default:
 	}
 
-	log.Printf("[heartbeat] PONG received from server for device %s", hm.deviceID)
+	if hm.config.LogLevel {
+		log.Printf("[heartbeat] PONG received from server for device %s", hm.deviceID)
+	}
 }
 
 // handleMissedHeartbeat processes a missed heartbeat
@@ -233,12 +241,16 @@ func (hm *HeartbeatManager) handleMissedHeartbeat(reason string) {
 	defer hm.mutex.Unlock()
 
 	hm.missedBeats++
-	log.Printf("[heartbeat] Missed heartbeat #%d: %s (device: %s)",
-		hm.missedBeats, reason, hm.deviceID)
+	if hm.config.LogLevel {
+		log.Printf("[heartbeat] Missed heartbeat #%d: %s (device: %s)",
+			hm.missedBeats, reason, hm.deviceID)
+	}
 
 	if hm.missedBeats >= hm.config.MaxMissedBeats {
-		log.Printf("[heartbeat] Connection considered dead after %d missed heartbeats (device: %s)",
-			hm.missedBeats, hm.deviceID)
+		if hm.config.LogLevel {
+			log.Printf("[heartbeat] Connection considered dead after %d missed heartbeats (device: %s)",
+				hm.missedBeats, hm.deviceID)
+		}
 		if hm.onDisconnect != nil {
 			hm.onDisconnect(fmt.Errorf("connection dead: %d missed heartbeats", hm.missedBeats))
 		}
@@ -269,7 +281,9 @@ func (hm *HeartbeatManager) Stop() {
 		hm.isRunning = false
 		hm.isActive = false
 		close(hm.stopChan)
-		log.Printf("[heartbeat] Heartbeat manager stopped for device %s", hm.deviceID)
+		if hm.config.LogLevel {
+			log.Printf("[heartbeat] Heartbeat manager stopped for device %s", hm.deviceID)
+		}
 	}
 }
 

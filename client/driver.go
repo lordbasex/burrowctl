@@ -232,11 +232,17 @@ func parseDSN(dsn string) (*DSNConfig, error) {
 	}
 
 	// Create and return configuration
+	// Create heartbeat configuration with LogLevel from debug setting
+	heartbeatConfig := DefaultHeartbeatConfig()
+	heartbeatConfig.LogLevel = debug // Use debug setting for heartbeat logging
+
 	conf := &DSNConfig{
 		DeviceID:                   deviceID,
 		AMQPURL:                    amqpURI,
 		Timeout:                    timeout,
 		Debug:                      debug,
+		HeartbeatEnabled:           true, // Enable heartbeat by default
+		HeartbeatConfig:            heartbeatConfig,
 		ReconnectEnabled:           reconnectEnabled,
 		ReconnectMaxAttempts:       reconnectMaxAttempts,
 		ReconnectInitialInterval:   reconnectInitialInterval,
