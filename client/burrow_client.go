@@ -101,7 +101,7 @@ func (bc *BurrowClient) ExecCommand(command string) (*CommandResult, error) {
 		if err := rows.Scan(&line); err != nil {
 			return nil, fmt.Errorf("failed to scan command output: %w", err)
 		}
-		
+
 		// Simple heuristic: if line contains "error" or "ERROR", treat as stderr
 		if strings.Contains(strings.ToLower(line), "error") {
 			result.Stderr = append(result.Stderr, line)
@@ -142,7 +142,7 @@ type FunctionResult struct {
 // This provides a cleaner interface than using db.Query("FUNCTION:...").
 func (bc *BurrowClient) ExecFunction(name string, params ...FunctionParam) (*FunctionResult, error) {
 	start := time.Now()
-	
+
 	funcReq := FunctionRequest{
 		Name:   name,
 		Params: params,
@@ -170,20 +170,44 @@ func (bc *BurrowClient) ExecFunction(name string, params ...FunctionParam) (*Fun
 		Duration:   time.Since(start),
 	}
 
+	// Get column information to understand the result structure
+	columns, err := rows.Columns()
+	if err != nil {
+		result.Error = err.Error()
+		return result, fmt.Errorf("failed to get columns: %w", err)
+	}
+
 	// Process function result
 	if rows.Next() {
-		var resultStr string
-		if err := rows.Scan(&resultStr); err != nil {
+		// Create scan destinations for all columns
+		scanDest := make([]interface{}, len(columns))
+		for i := range scanDest {
+			scanDest[i] = new(interface{})
+		}
+
+		// Scan all columns
+		if err := rows.Scan(scanDest...); err != nil {
 			result.Error = err.Error()
 			return result, fmt.Errorf("failed to scan function result: %w", err)
 		}
-		
-		// Try to parse as JSON, fallback to string
-		var jsonResult interface{}
-		if err := json.Unmarshal([]byte(resultStr), &jsonResult); err == nil {
-			result.Result = jsonResult
+
+		// Convert scan destinations to actual values
+		values := make([]interface{}, len(columns))
+		for i, dest := range scanDest {
+			values[i] = *(dest.(*interface{}))
+		}
+
+		// Handle different result formats based on column count
+		if len(columns) == 1 {
+			// Single result: use the first value
+			result.Result = values[0]
 		} else {
-			result.Result = resultStr
+			// Multiple results: create a map with column names as keys
+			resultMap := make(map[string]interface{})
+			for i, col := range columns {
+				resultMap[col] = values[i]
+			}
+			result.Result = resultMap
 		}
 	}
 
