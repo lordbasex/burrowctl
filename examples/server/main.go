@@ -11,6 +11,25 @@ func main() {
 	// Load configuration from flags and environment variables
 	config := server.LoadConfigFromFlags()
 
+	// EJEMPLO: Configurar stored procedures permitidos
+	// Para habilitar stored procedures específicos, configura la lista de procedimientos permitidos
+	// Esta es una medida de seguridad para controlar qué procedimientos se pueden ejecutar
+
+	// Habilitar stored procedures
+	config.AllowStoredProcs = true
+
+	// Lista blanca de stored procedures permitidos
+	// Solo estos procedimientos podrán ser ejecutados con comandos CALL
+	config.AllowedStoredProcs = []string{
+		"get_or_create_default_campaign", // El procedimiento del ejemplo
+		// "otro_procedimiento_permitido",  // Añade más según sea necesario
+		// "procedimiento_reports",         // Ejemplo de otro procedimiento
+	}
+
+	// NOTA IMPORTANTE: Si AllowedStoredProcs está vacío, se permitirán TODOS
+	// los stored procedures cuando AllowStoredProcs = true. Por seguridad,
+	// es recomendable siempre especificar la lista explícita de procedimientos permitidos.
+
 	// Override specific values for this example (keeping the detailed documentation)
 	// The configuration below shows advanced examples but will be overridden by environment variables
 	// _ = &server.ServerConfig{

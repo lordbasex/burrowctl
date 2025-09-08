@@ -27,13 +27,14 @@ type ServerConfig struct {
 	CacheCleanup time.Duration
 
 	// SQL Validation configuration
-	ValidationEnabled bool
-	StrictMode        bool
-	AllowDDL          bool
-	AllowDML          bool
-	AllowStoredProcs  bool
-	MaxQueryLength    int
-	LogViolations     bool
+	ValidationEnabled  bool
+	StrictMode         bool
+	AllowDDL           bool
+	AllowDML           bool
+	AllowStoredProcs   bool
+	MaxQueryLength     int
+	LogViolations      bool
+	AllowedStoredProcs []string // Lista blanca de stored procedures permitidos
 
 	// Performance configuration
 	Workers   int
@@ -89,13 +90,14 @@ func DefaultServerConfig() *ServerConfig {
 		CacheCleanup: 5 * time.Minute,
 
 		// SQL Validation configuration
-		ValidationEnabled: true,
-		StrictMode:        false,
-		AllowDDL:          false,
-		AllowDML:          true,
-		AllowStoredProcs:  false,
-		MaxQueryLength:    10000,
-		LogViolations:     true,
+		ValidationEnabled:  true,
+		StrictMode:         false,
+		AllowDDL:           false,
+		AllowDML:           true,
+		AllowStoredProcs:   false,
+		MaxQueryLength:     10000,
+		LogViolations:      true,
+		AllowedStoredProcs: []string{}, // Lista vacía por defecto - debe configurarse explícitamente
 
 		// Performance configuration
 		Workers:   25,
@@ -309,6 +311,7 @@ func (sc *ServerConfig) ToSQLValidationConfig() SQLValidationConfig {
 		AllowDML:              sc.AllowDML,
 		AllowDQL:              true, // Always allow SELECT queries
 		AllowStoredProcedures: sc.AllowStoredProcs,
+		AllowedStoredProcs:    sc.AllowedStoredProcs, // Lista blanca de stored procedures
 		MaxQueryLength:        sc.MaxQueryLength,
 		StrictMode:            sc.StrictMode,
 		LogViolations:         sc.LogViolations,

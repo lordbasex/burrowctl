@@ -35,6 +35,7 @@ type SQLValidationConfig struct {
 	AllowDML              bool     // Allow Data Manipulation Language (INSERT, UPDATE, DELETE)
 	AllowDQL              bool     // Allow Data Query Language (SELECT)
 	AllowStoredProcedures bool     // Allow stored procedure calls
+	AllowedStoredProcs    []string // Whitelist of allowed stored procedure names
 	MaxQueryLength        int      // Maximum allowed query length
 	StrictMode            bool     // Enable strict validation (more restrictive)
 	LogViolations         bool     // Log validation violations
@@ -94,14 +95,15 @@ func DefaultSQLValidationConfig() SQLValidationConfig {
 		Enabled:               true,
 		AllowedCommands:       []string{"SELECT", "INSERT", "UPDATE", "DELETE"},
 		BlockedCommands:       []string{"DROP", "TRUNCATE", "ALTER", "CREATE USER", "GRANT", "REVOKE"},
-		AllowDDL:              false, // Disable DDL by default for security
-		AllowDML:              true,  // Allow basic data manipulation
-		AllowDQL:              true,  // Allow data queries
-		AllowStoredProcedures: false, // Disable stored procedures by default
-		MaxQueryLength:        10000, // 10KB max query size
-		StrictMode:            false, // Balanced security/usability
-		LogViolations:         true,  // Log security violations
-		LogLevel:              false, // Default: minimal logging
+		AllowDDL:              false,      // Disable DDL by default for security
+		AllowDML:              true,       // Allow basic data manipulation
+		AllowDQL:              true,       // Allow data queries
+		AllowStoredProcedures: false,      // Disable stored procedures by default
+		AllowedStoredProcs:    []string{}, // Empty whitelist by default
+		MaxQueryLength:        10000,      // 10KB max query size
+		StrictMode:            false,      // Balanced security/usability
+		LogViolations:         true,       // Log security violations
+		LogLevel:              false,      // Default: minimal logging
 	}
 }
 
@@ -214,7 +216,7 @@ func (v *SQLValidator) ValidateQuery(query string, params []interface{}) Validat
 	}
 
 	// 3. Command validation
-	if !v.validateCommand(result.DetectedCommand) {
+	if !v.validateCommand(result.DetectedCommand, query) {
 		result.Valid = false
 		result.Errors = append(result.Errors, fmt.Sprintf("Command '%s' is not allowed by current policy", result.DetectedCommand))
 		v.incrementCommandViolations()
@@ -281,7 +283,7 @@ func (v *SQLValidator) detectCommand(query string) string {
 }
 
 // validateCommand checks if a command is allowed by the current policy.
-func (v *SQLValidator) validateCommand(command string) bool {
+func (v *SQLValidator) validateCommand(command string, query string) bool {
 	command = strings.ToUpper(command)
 
 	// Check blacklist first
@@ -295,6 +297,10 @@ func (v *SQLValidator) validateCommand(command string) bool {
 	if len(v.config.AllowedCommands) > 0 {
 		for _, allowed := range v.config.AllowedCommands {
 			if strings.ToUpper(allowed) == command {
+				// Special handling for CALL commands with stored procedure whitelist
+				if command == "CALL" {
+					return v.validateStoredProcedure(query)
+				}
 				return true
 			}
 		}
@@ -313,12 +319,64 @@ func (v *SQLValidator) validateCommand(command string) bool {
 		return v.config.AllowDDL
 
 	case "CALL", "EXEC", "EXECUTE":
-		return v.config.AllowStoredProcedures
+		if v.config.AllowStoredProcedures {
+			return v.validateStoredProcedure(query)
+		}
+		return false
 
 	default:
 		// Unknown commands are blocked in strict mode, allowed otherwise
 		return !v.config.StrictMode
 	}
+}
+
+// validateStoredProcedure checks if a stored procedure call is allowed by the whitelist.
+func (v *SQLValidator) validateStoredProcedure(query string) bool {
+	// If no stored procedures are explicitly configured, allow any when AllowStoredProcedures is true
+	if len(v.config.AllowedStoredProcs) == 0 {
+		return v.config.AllowStoredProcedures
+	}
+
+	// Extract procedure name from CALL statement
+	procName := v.extractStoredProcedureName(query)
+	if procName == "" {
+		if v.config.LogLevel {
+			log.Printf("[server] Could not extract stored procedure name from query: %s", v.truncateForLog(query))
+		}
+		return false
+	}
+
+	// Check if procedure is in whitelist
+	for _, allowed := range v.config.AllowedStoredProcs {
+		if strings.EqualFold(procName, allowed) {
+			if v.config.LogLevel {
+				log.Printf("[server] Stored procedure '%s' allowed by whitelist", procName)
+			}
+			return true
+		}
+	}
+
+	if v.config.LogLevel {
+		log.Printf("[server] Stored procedure '%s' not found in whitelist %v", procName, v.config.AllowedStoredProcs)
+	}
+	return false
+}
+
+// extractStoredProcedureName extracts the stored procedure name from a CALL statement.
+func (v *SQLValidator) extractStoredProcedureName(query string) string {
+	// Remove leading/trailing whitespace and normalize
+	normalized := strings.TrimSpace(query)
+
+	// Use regex to extract procedure name from CALL statement
+	// Pattern matches: CALL procedure_name(...) or CALL procedure_name
+	callRegex := regexp.MustCompile(`(?i)^\s*CALL\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(\(|$)`)
+	matches := callRegex.FindStringSubmatch(normalized)
+
+	if len(matches) >= 2 {
+		return matches[1] // Return the captured procedure name
+	}
+
+	return ""
 }
 
 // detectSQLInjection scans query for SQL injection patterns.
