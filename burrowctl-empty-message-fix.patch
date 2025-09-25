@@ -1,0 +1,229 @@
+From 68f4537fdaf47ded53639aae278ec7bd4392f557 Mon Sep 17 00:00:00 2001
+From: Federico Pereira <fpereira@iperfex.com>
+Date: Thu, 25 Sep 2025 11:37:06 -0300
+Subject: [PATCH] fix: Implement comprehensive solution for empty message
+ handling
+
+- Add multi-layer validation for empty messages across the system
+- Implement early filtering in main loop to prevent processing empty messages
+- Add robust validation in handleMessage with detailed logging
+- Enhance heartbeat manager with strict field validation
+- Add worker pool filtering to skip problematic messages
+- Improve error handling with informative error messages
+- Add truncateString utility for safe logging of long messages
+- Implement comprehensive logging for better diagnostics
+
+This resolves the 'unexpected end of JSON input' errors caused by empty
+messages and improves overall system stability and robustness.
+
+Files modified:
+- server/server.go: Added validation in handleMessage and main loop
+- server/heartbeat.go: Enhanced heartbeat validation and error handling
+- server/worker_pool.go: Added message filtering in worker pool
+
+The solution implements defense-in-depth with validation at multiple levels:
+1. Main loop level - early filtering
+2. Handler level - message validation
+3. Worker pool level - task filtering
+4. Heartbeat level - strict validation
+5. Parsing level - robust error handling
+---
+ server/heartbeat.go   | 19 ++++++++---
+ server/server.go      | 75 +++++++++++++++++++++++++++++++++++++++++--
+ server/worker_pool.go | 17 ++++++++++
+ 3 files changed, 105 insertions(+), 6 deletions(-)
+
+diff --git a/server/heartbeat.go b/server/heartbeat.go
+index c2c330a..4eeafc4 100644
+--- a/server/heartbeat.go
++++ b/server/heartbeat.go
+@@ -97,7 +97,7 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
+ 		return
+ 	}
+ 
+-	// Validate message body is not empty
++	// SOLUCIÓN 2: Validación estricta de heartbeats vacíos
+ 	if len(msg.Body) == 0 {
+ 		if shm.config.LogLevel {
+ 			log.Printf("[server-heartbeat] Received empty heartbeat message from %s (correlation: %s)",
+@@ -106,19 +106,30 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
+ 		return
+ 	}
+ 
+-	// Log raw message for debugging (truncated to avoid spam)
++	// Validar campos mínimos requeridos
++	if msg.ReplyTo == "" || msg.CorrelationId == "" {
++		if shm.config.LogLevel {
++			log.Printf("[server-heartbeat] Invalid heartbeat message - missing ReplyTo or CorrelationId (ReplyTo: %s, CorrelationId: %s)",
++				msg.ReplyTo, msg.CorrelationId)
++		}
++		return
++	}
++
++	// SOLUCIÓN 5: Logging mejorado y validación de contenido
+ 	bodyStr := string(msg.Body)
+ 	if len(bodyStr) > 200 {
+ 		bodyStr = bodyStr[:200] + "..."
+ 	}
+ 	if shm.config.LogLevel {
+-		log.Printf("[server-heartbeat] Processing heartbeat message: %s", bodyStr)
++		log.Printf("[server-heartbeat] Processing heartbeat message (length: %d): %s", len(msg.Body), bodyStr)
+ 	}
+ 
+ 	var ping map[string]interface{}
+ 	if err := json.Unmarshal(msg.Body, &ping); err != nil {
++		// SOLUCIÓN 5: Manejo mejorado de errores de parsing en heartbeat
+ 		if shm.config.LogLevel {
+-			log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body: %s)", err, string(msg.Body))
++			log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body length: %d, body preview: %s)",
++				err, len(msg.Body), truncateString(string(msg.Body), 100))
+ 		}
+ 		return
+ 	}
+diff --git a/server/server.go b/server/server.go
+index a73f65e..deba0ec 100644
+--- a/server/server.go
++++ b/server/server.go
+@@ -334,6 +334,21 @@ func (h *Handler) Start(ctx context.Context) error {
+ 			}
+ 			return nil
+ 		case msg := <-rpcMsgs:
++			// SOLUCIÓN 4: Logging detallado para diagnóstico
++			if h.config.LogLevel {
++				log.Printf("[server] Received RPC message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
++					len(msg.Body), msg.ReplyTo, msg.CorrelationId)
++			}
++
++			// Validación temprana de mensajes problemáticos
++			if len(msg.Body) == 0 {
++				if h.config.LogLevel {
++					log.Printf("[server] Skipping empty RPC message (ReplyTo: %s, CorrelationId: %s)",
++						msg.ReplyTo, msg.CorrelationId)
++				}
++				continue
++			}
++
+ 			// Submit RPC message to worker pool
+ 			task := MessageTask{
+ 				Channel:   ch,
+@@ -356,6 +371,21 @@ func (h *Handler) Start(ctx context.Context) error {
+ 				}
+ 			}
+ 		case msg := <-heartbeatMsgs:
++			// SOLUCIÓN 4: Logging detallado para heartbeats
++			if h.config.LogLevel {
++				log.Printf("[server] Received heartbeat message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
++					len(msg.Body), msg.ReplyTo, msg.CorrelationId)
++			}
++
++			// Validación temprana de heartbeats problemáticos
++			if len(msg.Body) == 0 {
++				if h.config.LogLevel {
++					log.Printf("[server] Skipping empty heartbeat message (ReplyTo: %s, CorrelationId: %s)",
++						msg.ReplyTo, msg.CorrelationId)
++				}
++				continue
++			}
++
+ 			// Process heartbeat message directly (high priority)
+ 			h.heartbeatManager.HandleHeartbeatPing(ch, msg)
+ 		}
+@@ -372,6 +402,21 @@ func (h *Handler) Start(ctx context.Context) error {
+ //
+ // This method runs in a separate goroutine for each message to enable concurrent processing.
+ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
++	// SOLUCIÓN 1: Validación de mensajes vacíos
++	if len(msg.Body) == 0 {
++		if h.config.LogLevel {
++			log.Printf("[server] Received empty message, ignoring (ReplyTo: %s, CorrelationId: %s)",
++				msg.ReplyTo, msg.CorrelationId)
++		}
++		return
++	}
++
++	// SOLUCIÓN 5: Logging detallado para diagnóstico
++	if h.config.LogLevel {
++		log.Printf("[server] Processing message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
++			len(msg.Body), msg.ReplyTo, msg.CorrelationId)
++	}
++
+ 	// Check if this is a heartbeat message by examining the message body first
+ 	if len(msg.Body) > 0 {
+ 		var heartbeatCheck map[string]interface{}
+@@ -394,10 +439,21 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
+ 
+ 	var req RPCRequest
+ 	if err := json.Unmarshal(msg.Body, &req); err != nil {
++		// SOLUCIÓN 5: Manejo mejorado de errores de parsing
+ 		if h.config.LogLevel {
+-			log.Printf("[server] Failed to parse RPC request: %v (body: %s)", err, string(msg.Body))
++			log.Printf("[server] Failed to parse RPC request: %v (body length: %d, body preview: %s)",
++				err, len(msg.Body), truncateString(string(msg.Body), 100))
+ 		}
+-		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
++
++		// Enviar respuesta de error más informativa
++		errorMsg := "Invalid JSON request format"
++		if len(msg.Body) == 0 {
++			errorMsg = "Empty request body"
++		} else if len(msg.Body) < 10 {
++			errorMsg = "Request body too short to be valid JSON"
++		}
++
++		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: errorMsg})
+ 		return
+ 	}
+ 
+@@ -1178,6 +1234,21 @@ func truncateQuery(query string, maxLength int) string {
+ 	return query[:maxLength] + "..."
+ }
+ 
++// truncateString truncates any string for logging purposes.
++//
++// Parameters:
++//   - str: String to truncate
++//   - maxLength: Maximum length of the truncated string
++//
++// Returns:
++//   - string: Truncated string with ellipsis if needed
++func truncateString(str string, maxLength int) string {
++	if len(str) <= maxLength {
++		return str
++	}
++	return str[:maxLength] + "..."
++}
++
+ // GetCacheStats returns current cache statistics for monitoring.
+ func (h *Handler) GetCacheStats() CacheStats {
+ 	return h.queryCache.GetStats()
+diff --git a/server/worker_pool.go b/server/worker_pool.go
+index 09772d7..73bfbb6 100644
+--- a/server/worker_pool.go
++++ b/server/worker_pool.go
+@@ -232,6 +232,23 @@ func (wp *WorkerPool) worker(id int) {
+ func (wp *WorkerPool) processTask(workerID int, task MessageTask) {
+ 	start := time.Now()
+ 
++	// SOLUCIÓN 3: Filtrado en worker pool para mensajes problemáticos
++	if len(task.Message.Body) == 0 {
++		if wp.logLevel {
++			log.Printf("[server] Worker %d skipping empty message (ReplyTo: %s, CorrelationId: %s)",
++				workerID, task.Message.ReplyTo, task.Message.CorrelationId)
++		}
++		return
++	}
++
++	// Validar campos mínimos requeridos
++	if task.Message.ReplyTo == "" || task.Message.CorrelationId == "" {
++		if wp.logLevel {
++			log.Printf("[server] Worker %d skipping invalid message - missing ReplyTo or CorrelationId", workerID)
++		}
++		return
++	}
++
+ 	// Create timeout context for this specific task
+ 	ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
+ 	defer cancel()
+-- 
+2.50.1 (Apple Git-155)
+
