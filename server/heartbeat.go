@@ -97,7 +97,7 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
 		return
 	}
 
-	// Validate message body is not empty
+	// SOLUCIÓN 2: Validación estricta de heartbeats vacíos
 	if len(msg.Body) == 0 {
 		if shm.config.LogLevel {
 			log.Printf("[server-heartbeat] Received empty heartbeat message from %s (correlation: %s)",
@@ -106,19 +106,30 @@ func (shm *ServerHeartbeatManager) HandleHeartbeatPing(ch *amqp.Channel, msg amq
 		return
 	}
 
-	// Log raw message for debugging (truncated to avoid spam)
+	// Validar campos mínimos requeridos
+	if msg.ReplyTo == "" || msg.CorrelationId == "" {
+		if shm.config.LogLevel {
+			log.Printf("[server-heartbeat] Invalid heartbeat message - missing ReplyTo or CorrelationId (ReplyTo: %s, CorrelationId: %s)",
+				msg.ReplyTo, msg.CorrelationId)
+		}
+		return
+	}
+
+	// SOLUCIÓN 5: Logging mejorado y validación de contenido
 	bodyStr := string(msg.Body)
 	if len(bodyStr) > 200 {
 		bodyStr = bodyStr[:200] + "..."
 	}
 	if shm.config.LogLevel {
-		log.Printf("[server-heartbeat] Processing heartbeat message: %s", bodyStr)
+		log.Printf("[server-heartbeat] Processing heartbeat message (length: %d): %s", len(msg.Body), bodyStr)
 	}
 
 	var ping map[string]interface{}
 	if err := json.Unmarshal(msg.Body, &ping); err != nil {
+		// SOLUCIÓN 5: Manejo mejorado de errores de parsing en heartbeat
 		if shm.config.LogLevel {
-			log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body: %s)", err, string(msg.Body))
+			log.Printf("[server-heartbeat] Failed to parse heartbeat ping: %v (body length: %d, body preview: %s)",
+				err, len(msg.Body), truncateString(string(msg.Body), 100))
 		}
 		return
 	}

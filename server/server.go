@@ -334,6 +334,21 @@ func (h *Handler) Start(ctx context.Context) error {
 			}
 			return nil
 		case msg := <-rpcMsgs:
+			// SOLUCIÓN 4: Logging detallado para diagnóstico
+			if h.config.LogLevel {
+				log.Printf("[server] Received RPC message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
+					len(msg.Body), msg.ReplyTo, msg.CorrelationId)
+			}
+
+			// Validación temprana de mensajes problemáticos
+			if len(msg.Body) == 0 {
+				if h.config.LogLevel {
+					log.Printf("[server] Skipping empty RPC message (ReplyTo: %s, CorrelationId: %s)",
+						msg.ReplyTo, msg.CorrelationId)
+				}
+				continue
+			}
+
 			// Submit RPC message to worker pool
 			task := MessageTask{
 				Channel:   ch,
@@ -356,6 +371,21 @@ func (h *Handler) Start(ctx context.Context) error {
 				}
 			}
 		case msg := <-heartbeatMsgs:
+			// SOLUCIÓN 4: Logging detallado para heartbeats
+			if h.config.LogLevel {
+				log.Printf("[server] Received heartbeat message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
+					len(msg.Body), msg.ReplyTo, msg.CorrelationId)
+			}
+
+			// Validación temprana de heartbeats problemáticos
+			if len(msg.Body) == 0 {
+				if h.config.LogLevel {
+					log.Printf("[server] Skipping empty heartbeat message (ReplyTo: %s, CorrelationId: %s)",
+						msg.ReplyTo, msg.CorrelationId)
+				}
+				continue
+			}
+
 			// Process heartbeat message directly (high priority)
 			h.heartbeatManager.HandleHeartbeatPing(ch, msg)
 		}
@@ -372,6 +402,21 @@ func (h *Handler) Start(ctx context.Context) error {
 //
 // This method runs in a separate goroutine for each message to enable concurrent processing.
 func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
+	// SOLUCIÓN 1: Validación de mensajes vacíos
+	if len(msg.Body) == 0 {
+		if h.config.LogLevel {
+			log.Printf("[server] Received empty message, ignoring (ReplyTo: %s, CorrelationId: %s)",
+				msg.ReplyTo, msg.CorrelationId)
+		}
+		return
+	}
+
+	// SOLUCIÓN 5: Logging detallado para diagnóstico
+	if h.config.LogLevel {
+		log.Printf("[server] Processing message - Body length: %d, ReplyTo: %s, CorrelationId: %s",
+			len(msg.Body), msg.ReplyTo, msg.CorrelationId)
+	}
+
 	// Check if this is a heartbeat message by examining the message body first
 	if len(msg.Body) > 0 {
 		var heartbeatCheck map[string]interface{}
@@ -394,10 +439,21 @@ func (h *Handler) handleMessage(ch *amqp.Channel, msg amqp.Delivery) {
 
 	var req RPCRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
+		// SOLUCIÓN 5: Manejo mejorado de errores de parsing
 		if h.config.LogLevel {
-			log.Printf("[server] Failed to parse RPC request: %v (body: %s)", err, string(msg.Body))
+			log.Printf("[server] Failed to parse RPC request: %v (body length: %d, body preview: %s)",
+				err, len(msg.Body), truncateString(string(msg.Body), 100))
 		}
-		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: err.Error()})
+
+		// Enviar respuesta de error más informativa
+		errorMsg := "Invalid JSON request format"
+		if len(msg.Body) == 0 {
+			errorMsg = "Empty request body"
+		} else if len(msg.Body) < 10 {
+			errorMsg = "Request body too short to be valid JSON"
+		}
+
+		h.respond(ch, msg.ReplyTo, msg.CorrelationId, RPCResponse{Error: errorMsg})
 		return
 	}
 
@@ -1176,6 +1232,21 @@ func truncateQuery(query string, maxLength int) string {
 		return query
 	}
 	return query[:maxLength] + "..."
+}
+
+// truncateString truncates any string for logging purposes.
+//
+// Parameters:
+//   - str: String to truncate
+//   - maxLength: Maximum length of the truncated string
+//
+// Returns:
+//   - string: Truncated string with ellipsis if needed
+func truncateString(str string, maxLength int) string {
+	if len(str) <= maxLength {
+		return str
+	}
+	return str[:maxLength] + "..."
 }
 
 // GetCacheStats returns current cache statistics for monitoring.

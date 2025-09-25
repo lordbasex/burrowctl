@@ -232,6 +232,23 @@ func (wp *WorkerPool) worker(id int) {
 func (wp *WorkerPool) processTask(workerID int, task MessageTask) {
 	start := time.Now()
 
+	// SOLUCIÓN 3: Filtrado en worker pool para mensajes problemáticos
+	if len(task.Message.Body) == 0 {
+		if wp.logLevel {
+			log.Printf("[server] Worker %d skipping empty message (ReplyTo: %s, CorrelationId: %s)",
+				workerID, task.Message.ReplyTo, task.Message.CorrelationId)
+		}
+		return
+	}
+
+	// Validar campos mínimos requeridos
+	if task.Message.ReplyTo == "" || task.Message.CorrelationId == "" {
+		if wp.logLevel {
+			log.Printf("[server] Worker %d skipping invalid message - missing ReplyTo or CorrelationId", workerID)
+		}
+		return
+	}
+
 	// Create timeout context for this specific task
 	ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
 	defer cancel()
